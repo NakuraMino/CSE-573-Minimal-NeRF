@@ -3,8 +3,9 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
+from pytorch_lightning import LightningModule
 
-def positional_encoding(x, dim=10):
+def naive_positional_encoding(x, dim=10):
     """project input to higher dimensional space as a positional encoding.
     """ 
     n, d = x.shape
@@ -15,6 +16,18 @@ def positional_encoding(x, dim=10):
             orig_feature = x[:, j]
             positional_encoding[:,j*2*dim+2*i] = torch.sin(2**i * torch.pi * orig_feature)
             positional_encoding[:,j*2*dim+2*i+1] = torch.cos(2**i * torch.pi * orig_feature)
+    return positional_encoding
+
+
+def positional_encoding(x, dim=10):
+    """project input to higher dimensional space as a positional encoding.
+    """ 
+    n, d = x.shape
+    positional_encoding = []    
+    for i in range(dim):
+        positional_encoding.append(torch.cos(2**i * torch.pi * x))
+        positional_encoding.append(torch.sin(2**i * torch.pi * x))
+    positional_encoding = torch.cat(positional_encoding, dim=1)
     return positional_encoding
 
 
@@ -69,3 +82,56 @@ class NeRFModel(nn.Module):
         rgb = self.rgb_fn(features)
 
         return density, rgb
+
+
+class ImageNeRFModel(LightningModule):
+    def __init__(self, position_dim=10): 
+        super(ImageNeRFModel, self).__init__()
+        self.position_dim = position_dim
+        # first MLP is a simple multi-layer perceptron 
+        self.mlp = nn.Sequential(
+            nn.Linear(40, 256),
+            nn.ReLU(),
+            nn.Linear(256, 256),
+            nn.ReLU(),
+            nn.Linear(256, 256),
+            nn.ReLU(),
+            nn.Linear(256, 256),
+            nn.ReLU(),
+            nn.Linear(256, 256),
+            nn.ReLU(),
+            nn.Linear(256, 256),
+            nn.ReLU(),
+            nn.Linear(256, 256),
+            nn.ReLU(),
+            nn.Linear(256, 128),
+            nn.ReLU(),
+            nn.Linear(128, 3),
+            nn.Sigmoid()
+        )
+    
+    def forward(self, x): 
+        # positional encodings
+        pos_enc_x = positional_encoding(x, dim=self.position_dim)
+        # feed forward network
+        rgb = self.mlp(pos_enc_x)
+        return rgb
+
+    def configure_optimizers(self):
+        optimizer = torch.optim.Adam(self.parameters(), lr=5e-4)
+        return optimizer
+
+    def training_step(self, train_batch, batch_idx):
+        x, y = train_batch 
+        pred_rgb = self.forward(x)
+        loss = F.mse_loss(pred_rgb, y)
+        self.log('train_loss', loss)
+        return loss
+    
+    def validation_step(self, val_batch, batch_idx): 
+        coords, rgb = val_batch 
+        pred_rgb = self.forward(coords)
+        loss = F.mse_loss(pred_rgb, rgb)
+        self.log('val_loss', loss)
+        return loss
+    

@@ -19,7 +19,7 @@ class NerfModelTest(unittest.TestCase):
 
     def test_positional_encoding_values(self): 
         enc = nerf_model.positional_encoding(self.vector, dim=1)
-        expected = torch.Tensor([[0.0, -1.0, 0.0, -1.0, 0.0, -1.0]])
+        expected = torch.Tensor([[-1.0, -1.0, -1.0, 0.0, 0.0, 0.0]])
         testing.assert_close(enc, expected)
 
     def test_complex_positional_encoding_shape(self): 
@@ -28,8 +28,8 @@ class NerfModelTest(unittest.TestCase):
 
     def test_complex_positional_encoding_values(self): 
         enc = nerf_model.positional_encoding(self.complex_vector, dim=1)
-        expected = torch.Tensor([[0.0, 1.0, 0.0, 1.0, 0.0, 1.0],
-                                 [0.0, -1.0, 0.0, -1.0, 0.0, -1.0]])
+        expected = torch.Tensor([[1.0, 1.0, 1.0, 0.0, 0.0, 0.0],
+                                 [-1.0, -1.0, -1.0, 0.0, 0.0, 0.0]])
         testing.assert_close(enc, expected)
 
     def test_forward_prop_shape(self): 
