@@ -114,7 +114,7 @@ class ImageNeRFModel(LightningModule):
     
     def forward(self, x): 
         # positional encodings
-        if self.input_size > 0:
+        if self.position_dim > 0:
             x = positional_encoding(x, dim=self.position_dim)
         # feed forward network
         rgb = self.mlp(x)

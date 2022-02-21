@@ -22,7 +22,7 @@ class DataloaderTest(unittest.TestCase):
 
     def test_get_final_idx(self):
         coords, rgb = self.ds[403*538 - 1]
-        gt = torch.FloatTensor([402, 537])
+        gt = torch.FloatTensor([1.0, 1.0])
         testing.assert_close(coords, gt)
         self.assertEqual(rgb.shape, (3,))
 
