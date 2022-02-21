@@ -52,7 +52,6 @@ class SyntheticDataset(Dataset):
         return 
 
 
-
 class PhotoDataset(Dataset):
 
     def __init__(self, im_path): 
@@ -74,4 +73,21 @@ class PhotoDataset(Dataset):
 
 def getPhotoDataloader(im_path, batch_size=1024, num_workers=4, shuffle=True): 
     dataset = PhotoDataset(im_path)
+    return DataLoader(dataset=dataset, batch_size=batch_size, shuffle=shuffle, num_workers=num_workers)
+
+class ValDataset(Dataset):
+
+    def __init__(self, im_path):
+        self.im_path = im_path
+        self.im = cv2.imread(im_path, 1)
+        self.C, self.H, self.W = self.im.shape 
+
+    def __len__(self):
+        return 1
+    
+    def __get_item__(self, idx):
+        return (self.H, self.W)
+
+def getValDataloader(im_path, batch_size=1, num_workers=1, shuffle=False): 
+    dataset = ValDataset(im_path)
     return DataLoader(dataset=dataset, batch_size=batch_size, shuffle=shuffle, num_workers=num_workers)

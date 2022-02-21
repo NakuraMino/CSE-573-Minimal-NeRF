@@ -4,6 +4,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
 from pytorch_lightning import LightningModule
+from nerf_to_recon import photo_nerf_to_image, torch_to_numpy
 
 def naive_positional_encoding(x, dim=10):
     """project input to higher dimensional space as a positional encoding.
@@ -129,11 +130,18 @@ class ImageNeRFModel(LightningModule):
         loss = F.mse_loss(pred_rgb, y)
         self.log('train_loss', loss)
         return loss
-    
-    def validation_step(self, val_batch, batch_idx): 
-        coords, rgb = val_batch 
-        pred_rgb = self.forward(coords)
-        loss = F.mse_loss(pred_rgb, rgb)
-        self.log('val_loss', loss)
-        return loss
+
+    def validation_step(self, val_batch, batch_idx):
+        im_h, im_w = val_batch
+        im = photo_nerf_to_image(self, im_h, im_w)
+        im = torch_to_numpy(im, is_standardized_image=True)
+        self.log_image(key='recon', images=[im])
+        return 0
+
+    # def validation_step(self, val_batch, batch_idx): 
+    #     coords, rgb = val_batch 
+    #     pred_rgb = self.forward(coords)
+    #     loss = F.mse_loss(pred_rgb, rgb)
+    #     self.log('val_loss', loss)
+    #     return loss
     
