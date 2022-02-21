@@ -5,7 +5,8 @@ import nerf_model
 
 def train_simple_image(im_path): 
     wandb_logger = WandbLogger(name="grad_lounge_image", project="NeRF")
-    trainer = Trainer(gpus=1, default_root_dir="/home/nakuram/CSEP573-NeRF/experiments/", max_steps=100000, logger=wandb_logger)
+    trainer = Trainer(gpus=1, default_root_dir="/home/nakuram/CSEP573-NeRF/experiments/",
+            check_val_every_n_epoch=10, max_steps=100000, logger=wandb_logger)
     train_dl = dataloader.getPhotoDataloader(im_path, batch_size=4096, num_workers=8, shuffle=True)
     val_dl = dataloader.getValDataloader(im_path, batch_size=1, num_workers=1, shuffle=False)
     model = nerf_model.ImageNeRFModel(position_dim=10)
