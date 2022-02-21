@@ -89,8 +89,9 @@ class ImageNeRFModel(LightningModule):
         super(ImageNeRFModel, self).__init__()
         self.position_dim = position_dim
         # first MLP is a simple multi-layer perceptron 
+        self.input_size = 2*2*position_dim if position_dim > 0 else 2
         self.mlp = nn.Sequential(
-            nn.Linear(40, 256),
+            nn.Linear(self.input_size, 256),
             nn.ReLU(),
             nn.Linear(256, 256),
             nn.ReLU(),
@@ -112,9 +113,10 @@ class ImageNeRFModel(LightningModule):
     
     def forward(self, x): 
         # positional encodings
-        pos_enc_x = positional_encoding(x, dim=self.position_dim)
+        if self.input_size > 2:
+            x = positional_encoding(x, dim=self.position_dim)
         # feed forward network
-        rgb = self.mlp(pos_enc_x)
+        rgb = self.mlp(x)
         return rgb
 
     def configure_optimizers(self):
