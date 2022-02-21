@@ -85,7 +85,7 @@ class ValDataset(Dataset):
     def __len__(self):
         return 1
     
-    def __get_item__(self, idx):
+    def __getitem__(self, idx):
         return (self.H, self.W)
 
 def getValDataloader(im_path, batch_size=1, num_workers=1, shuffle=False): 

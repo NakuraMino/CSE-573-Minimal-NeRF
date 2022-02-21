@@ -43,8 +43,11 @@ def photo_nerf_to_image(model, im_h, im_w):
     Returns:
         an [im_h x im_w x 3] tensor representing an image.
     """
+    if type(im_h) != int:
+        im_h = int(im_h[0])
+        im_w = int(im_w[0])
     idxs = [(i,j) for i,j in itertools.product(np.arange(0,im_h), np.arange(0,im_w))]
-    idxs = torch.FloatTensor(idxs)
+    idxs = torch.FloatTensor(idxs).cuda()
     N, _ = idxs.shape
     recon = []
     step = 4096

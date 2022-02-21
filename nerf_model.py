@@ -1,10 +1,10 @@
-from re import M
 import torch 
 import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
 from pytorch_lightning import LightningModule
 from nerf_to_recon import photo_nerf_to_image, torch_to_numpy
+from PIL import Image
 
 def naive_positional_encoding(x, dim=10):
     """project input to higher dimensional space as a positional encoding.
@@ -135,7 +135,8 @@ class ImageNeRFModel(LightningModule):
         im_h, im_w = val_batch
         im = photo_nerf_to_image(self, im_h, im_w)
         im = torch_to_numpy(im, is_standardized_image=True)
-        self.log_image(key='recon', images=[im])
+        im = Image.fromarray(im.astype(np.uint8))
+        self.logger.log_image(key='recon', images=[im])
         return 0
 
     # def validation_step(self, val_batch, batch_idx): 
