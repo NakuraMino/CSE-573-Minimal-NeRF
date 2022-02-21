@@ -134,7 +134,7 @@ class ImageNeRFModel(LightningModule):
     def validation_step(self, val_batch, batch_idx):
         im_h, im_w = val_batch
         im = photo_nerf_to_image(self, im_h, im_w)
-        im = torch_to_numpy(im, is_standardized_image=True)
+        im = torch_to_numpy(im, is_normalized_image=True)
         im = Image.fromarray(im.astype(np.uint8))
         self.logger.log_image(key='recon', images=[im])
         return 0

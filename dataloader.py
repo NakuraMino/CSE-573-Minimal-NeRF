@@ -4,7 +4,6 @@ from torch.utils.data import Dataset, DataLoader
 import numpy as np
 from PIL import Image
 import json
-import cv2
 
 """Utility functions are repurposed from code written by Chris Xie. 
 """
