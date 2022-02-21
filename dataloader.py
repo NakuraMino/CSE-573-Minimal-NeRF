@@ -56,8 +56,7 @@ class PhotoDataset(Dataset):
 
     def __init__(self, im_path): 
         self.im_path = im_path
-        im = cv2.imread(im_path, 1)
-        im = cv2.cvtColor(im, cv2.COLOR_BGR2RGB)
+        im = np.array(Image.open(im_path))
         im = standardize_images(im)
         self.im = image_to_tensor(im) # C x H x W
         self.C, self.H, self.W = self.im.shape 
@@ -80,7 +79,7 @@ class ValDataset(Dataset):
 
     def __init__(self, im_path):
         self.im_path = im_path
-        self.im = cv2.imread(im_path, 1)
+        self.im = np.array(Image.open(im_path))
         self.H, self.W, self.C = self.im.shape 
 
     def __len__(self):
