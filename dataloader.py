@@ -67,7 +67,7 @@ class PhotoDataset(Dataset):
     def __getitem__(self, idx):
         h = idx // self.W
         w = idx % self.W
-        coords = torch.FloatTensor([h, w])
+        coords = torch.FloatTensor([h / (self.H - 1), w / (self.W - 1)])
         rgb = self.im[:, h, w]
         return coords, rgb
 
