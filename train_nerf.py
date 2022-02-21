@@ -10,7 +10,7 @@ def train_simple_image(im_path, logger_name, steps):
     trainer = Trainer(gpus=1, default_root_dir="/home/nakuram/CSEP573-NeRF/experiments/", max_steps=steps, logger=wandb_logger)
     train_dl = dataloader.getPhotoDataloader(im_path, batch_size=4096, num_workers=8, shuffle=True)
     val_dl = dataloader.getValDataloader(im_path, batch_size=1, num_workers=1, shuffle=False)
-    model = nerf_model.ImageNeRFModel(position_dim=10)
+    model = nerf_model.ImageNeRFModel(position_dim=-1)
     trainer.fit(model, train_dl, val_dl)
 
 if __name__ == '__main__': 

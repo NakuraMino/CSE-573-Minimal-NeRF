@@ -67,7 +67,7 @@ class PhotoDataset(Dataset):
     def __getitem__(self, idx):
         h = idx // self.W
         w = idx % self.W
-        coords = torch.FloatTensor([h, w])
+        coords = torch.FloatTensor([h / (self.H - 1), w / (self.W - 1)])
         rgb = self.im[:, h, w]
         return coords, rgb
 
@@ -80,7 +80,7 @@ class ValDataset(Dataset):
     def __init__(self, im_path):
         self.im_path = im_path
         self.im = cv2.imread(im_path, 1)
-        self.C, self.H, self.W = self.im.shape 
+        self.H, self.W, self.C = self.im.shape 
 
     def __len__(self):
         return 1
