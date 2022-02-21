@@ -138,11 +138,3 @@ class ImageNeRFModel(LightningModule):
         im = Image.fromarray(im.astype(np.uint8))
         self.logger.log_image(key='recon', images=[im])
         return 0
-
-    # def validation_step(self, val_batch, batch_idx): 
-    #     coords, rgb = val_batch 
-    #     pred_rgb = self.forward(coords)
-    #     loss = F.mse_loss(pred_rgb, rgb)
-    #     self.log('val_loss', loss)
-    #     return loss
-    

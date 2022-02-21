@@ -2,26 +2,12 @@ import os
 import torch 
 from torch.utils.data import Dataset, DataLoader
 import numpy as np
-import cv2 
 from PIL import Image
 import json
+import cv2
 
 """Utility functions are repurposed from code written by Chris Xie. 
 """
-
-def standardize_images(image):
-    """ Convert a numpy.ndarray [N x H x W x 3] of images to [0,1] range, and then standardizes
-        @return: a [N x H x W x 3] numpy array of np.float32
-    """
-    image_standardized = np.zeros_like(image).astype(np.float32)
-
-    mean=[0.485, 0.456, 0.406]
-    std=[0.229, 0.224, 0.225]
-    for i in range(3):
-        image_standardized[...,i] = (image[...,i]/255. - mean[i]) / std[i]
-
-    return image_standardized
-
 
 def image_to_tensor(image):
     if image.ndim == 4: # NHWC
@@ -56,8 +42,7 @@ class PhotoDataset(Dataset):
 
     def __init__(self, im_path): 
         self.im_path = im_path
-        im = np.array(Image.open(im_path))
-        im = standardize_images(im)
+        im = np.array(Image.open(im_path)) / 255.0
         self.im = image_to_tensor(im) # C x H x W
         self.C, self.H, self.W = self.im.shape 
 
@@ -79,7 +64,7 @@ class ValDataset(Dataset):
 
     def __init__(self, im_path):
         self.im_path = im_path
-        self.im = np.array(Image.open(im_path))
+        self.im = np.array(Image.open(im_path)) / 255.0
         self.H, self.W, self.C = self.im.shape 
 
     def __len__(self):

@@ -32,10 +32,6 @@ class DataloaderTest(unittest.TestCase):
         coords, rgb = batch
         self.assertEqual(coords.shape, (32, 2))
         self.assertEqual(rgb.shape, (32, 3))
-        
-    # def test_get_oob(self):
-    #     self.assertRaises(IndexError, self.dl[403*538])
-
 
 if __name__ == '__main__':
     unittest.main(verbosity=2)
