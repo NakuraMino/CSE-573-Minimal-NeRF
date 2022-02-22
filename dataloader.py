@@ -1,12 +1,13 @@
+"""Dataloaders for a photo and synthetic dataset.
+"""
 import os 
 import torch 
 from torch.utils.data import Dataset, DataLoader
 import numpy as np
 from PIL import Image
 import json
+from pathlib import Path
 
-"""Utility functions are repurposed from code written by Chris Xie. 
-"""
 
 def image_to_tensor(image):
     if image.ndim == 4: # NHWC
@@ -15,17 +16,12 @@ def image_to_tensor(image):
         tensor = torch.from_numpy(image).permute(2,0,1).float()
     return tensor
 
-def worker_init_fn(worker_id):
-    """ Use this to bypass issue with PyTorch dataloaders using deterministic RNG for Numpy
-        https://github.com/pytorch/pytorch/issues/5059
-    """
-    np.random.seed(np.random.get_state()[1][0] + worker_id)
-
 class SyntheticDataset(Dataset):
 
-    def __init__(self, base_dir): 
+    def __init__(self, base_dir, tvt): 
         self.base_dir = base_dir
-        file = open(self.base_dir)
+        self.tvt = tvt
+        file = open(f'{self.base_dir}transforms_{tvt}.json')
         self.data = json.load(file)
         self.camera_angle = self.data['camera_angle_x']
         self.frames = self.data['frames']
@@ -34,8 +30,33 @@ class SyntheticDataset(Dataset):
         return len(self.frames)
 
     def __getitem__(self, idx):
-        return 
+        frame = self.frames[idx]
+        frame.pop('rotation', None)  # not used?
+        im_path = Path(self.base_dir, f"{frame['file_path']}.png")
+        frame['image'] = image_to_tensor(np.array(Image.open(im_path)) / 255.0)
+        frame['transform_matrix'] = np.array(frame['transform_matrix'], dtype=np.float32)
+        frame['camera_angle'] = self.camera_angle
+        return frame
 
+    def collate_fn(self, batch):
+        im_paths = []
+        images = []
+        poses = []
+        camera_angles = []
+        for frame in batch:
+            im_paths.append(frame['file_path'])
+            images.append(frame['image'])
+            poses.append(frame['transform_matrix'])
+            camera_angles.append(frame['camera_angle']) 
+        images = torch.stack(images)
+        poses = torch.stack(poses)
+        camera_angles = torch.stack(camera_angles)
+        batch_dict = {'images': images, 'poses': poses, 'im_paths': im_paths, 'camera_angles': camera_angles}
+        return batch_dict
+
+def getSyntheticDataloader(base_dir, tvt, batch_size=16, num_workers=8, shuffle=True): 
+    dataset = SyntheticDataset(base_dir, tvt)
+    return DataLoader(dataset=dataset, batch_size=batch_size, shuffle=shuffle, num_workers=num_workers)
 
 class PhotoDataset(Dataset):
 
