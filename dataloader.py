@@ -16,47 +16,111 @@ def image_to_tensor(image):
         tensor = torch.from_numpy(image).permute(2,0,1).float()
     return tensor
 
+def sample_random_coordinates(N, height, width): 
+    """Returns [Nx4] randomly sampled coordinates in camera frame
+    """
+    xs = torch.randint(0, height, size=(N,))
+    ys = torch.randint(0, width, size=(N,))
+    return xs, ys
+    # cam_coords = torch.stack([xs, ys], axis=-1)
+    # return cam_coords
+
+def np_get_rays(H, W, focal, c2w):
+    """Get ray origins, directions from a pinhole camera."""
+    i, j = np.meshgrid(np.arange(W, dtype=np.float32),
+                       np.arange(H, dtype=np.float32), indexing='xy')
+    dirs = np.stack([(i-W*.5)/focal, -(j-H*.5)/focal, -np.ones_like(i)], -1)
+    rays_d = np.sum(dirs[..., np.newaxis, :] * c2w[:3, :3], -1)
+    rays_o = np.broadcast_to(c2w[:3, -1], np.shape(rays_d))
+    return rays_o, rays_d
+
+def get_rays(H, W, focal, c2w):
+    """Get ray origins, directions from a pinhole camera."""
+    i, j = torch.meshgrid(torch.arange(W, dtype=torch.float32),
+                       torch.arange(H, dtype=torch.float32), indexing='xy')
+    dirs = torch.stack([(i-W*.5)/focal, -(j-H*.5)/focal, -torch.ones_like(i)], -1)
+    rays_d = torch.sum(dirs[..., None, :] * c2w[:3, :3], -1)
+    rays_o = torch.broadcast_to(c2w[:3, -1], rays_d.shape)
+    return rays_o, rays_d
+
+def convert_to_ndc_rays(o_rays, d_rays, focal, width, height, near=1.0): 
+    """
+    Args:
+        d_rays: [N x 4] representing ray direction 
+        o_rays: [N x 4] representing ray origin 
+        angle: camera_angle_x
+        width: the maximum width 
+        height: the maximum height
+        near: the near depth bound (i.e. 1)
+    """
+    # shift o to the ray’s intersection with the near plane at z = −n
+    t_near  = - (near + o_rays[:,:,2] ) / d_rays[:,:,2] 
+    o_rays = o_rays + t_near[...,None] * d_rays
+
+    ox, oy, oz = o_rays[:,:,0], o_rays[:,:,1], o_rays[:,:,2] 
+    dx, dy, dz = d_rays[:,:,0], d_rays[:,:,1], d_rays[:,:,2] 
+    
+    ox_new =  -1.0 * focal / (width / 2) * (ox / oz)
+    oy_new =  -1.0 * focal / (height / 2) * (oy / oz)
+    oz_new = 1.0 + (2 * near) / oz
+    
+    dx_new =  -1.0 * focal / (width / 2) * ((dx / dz) - (ox / oz))
+    dy_new =  -1.0 * focal / (height / 2) * ((dy / dz) - (oy / oz))
+    dz_new = (- 2 * near) / oz
+    
+    o_ndc_rays = torch.stack([ox_new, oy_new, oz_new], axis=-1)
+    d_ndc_rays = torch.stack([dx_new, dy_new, dz_new], axis=-1)
+    
+    return o_ndc_rays, d_ndc_rays
+
 class SyntheticDataset(Dataset):
 
-    def __init__(self, base_dir, tvt): 
-        self.base_dir = base_dir
-        self.tvt = tvt
-        file = open(f'{self.base_dir}transforms_{tvt}.json')
-        self.data = json.load(file)
+    def __init__(self, base_dir, tvt, num_rays): 
+        self._setup(base_dir, tvt, num_rays)
+        self.data = json.load(open(f'{self.base_dir}transforms_{tvt}.json'))
         self.camera_angle = self.data['camera_angle_x']
+        self.focal = 0.5 * self.W / np.tan(0.5 * self.camera_angle)
         self.frames = self.data['frames']
+        self._preprocess()
+
+    def _setup(self, base_dir, tvt, num_rays): 
+        self.H = 800
+        self.W = 800
+        self.tvt = tvt
+        self.num_rays = num_rays
+        self.base_dir = base_dir
+        self.origin = torch.Tensor([[0,0,0,1]]).T
+
+    def _preprocess(self):
+        for f in self.frames:
+            f['cam_to_world'] = torch.Tensor(f['transform_matrix']) 
+            im_path = Path(self.base_dir, f"{f['file_path']}.png")
+            f['image'] = image_to_tensor(np.array(Image.open(im_path)) / 255.0) # [4xHxW]
+            # [HxWx3]
+            f['o_rays'], f['d_rays'] = get_rays(self.H, self.W, self.focal, f['cam_to_world']) 
+            # [HxWx3]
+            f['o_ndc_rays'], f['d_ndc_rays'] = convert_to_ndc_rays(f['o_rays'], f['d_rays'],   
+                                                                   self.focal, self.W, self.H,
+                                                                   near=1.0)
+            del f['rotation']; f.pop('rotation', None)
+            del f['transform_matrix']; f.pop('rotation', None)
+
 
     def __len__(self):
         return len(self.frames)
 
     def __getitem__(self, idx):
         frame = self.frames[idx]
-        frame.pop('rotation', None)  # not used?
-        im_path = Path(self.base_dir, f"{frame['file_path']}.png")
-        frame['image'] = image_to_tensor(np.array(Image.open(im_path)) / 255.0)
-        frame['transform_matrix'] = np.array(frame['transform_matrix'], dtype=np.float32)
-        frame['camera_angle'] = self.camera_angle
-        return frame
+        # retrieve image 
+        xs, ys = sample_random_coordinates(self.num_rays, self.H, self.W) # [Nx2]
+        rgba = frame['image'][:,xs,ys]
+        origin = frame['o_ndc_rays'][xs, ys, :]
+        direction = frame['d_ndc_rays'][xs, ys, :]
+        return {'origin': origin, 'direc': direction, 'rgba': rgba}
 
-    def collate_fn(self, batch):
-        im_paths = []
-        images = []
-        poses = []
-        camera_angles = []
-        for frame in batch:
-            im_paths.append(frame['file_path'])
-            images.append(frame['image'])
-            poses.append(frame['transform_matrix'])
-            camera_angles.append(frame['camera_angle']) 
-        images = torch.stack(images)
-        poses = torch.stack(poses)
-        camera_angles = torch.stack(camera_angles)
-        batch_dict = {'images': images, 'poses': poses, 'im_paths': im_paths, 'camera_angles': camera_angles}
-        return batch_dict
-
-def getSyntheticDataloader(base_dir, tvt, batch_size=16, num_workers=8, shuffle=True): 
-    dataset = SyntheticDataset(base_dir, tvt)
-    return DataLoader(dataset=dataset, batch_size=batch_size, shuffle=shuffle, num_workers=num_workers)
+def getSyntheticDataloader(base_dir, tvt, num_rays, num_workers=8, shuffle=True): 
+    dataset = SyntheticDataset(base_dir, tvt, num_rays)
+    return DataLoader(dataset=dataset, batch_size=1, shuffle=shuffle, num_workers=num_workers)
 
 class PhotoDataset(Dataset):
 
