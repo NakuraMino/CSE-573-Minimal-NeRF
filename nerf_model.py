@@ -4,26 +4,13 @@ import torch.nn.functional as F
 import numpy as np
 from pytorch_lightning import LightningModule
 from nerf_to_recon import photo_nerf_to_image, torch_to_numpy
+import nerf_helpers
 from PIL import Image
-
-def naive_positional_encoding(x, dim=10):
-    """project input to higher dimensional space as a positional encoding.
-    """ 
-    n, d = x.shape
-    pos_enc_size = d * 2 * dim
-    positional_encoding = torch.zeros((n, pos_enc_size))
-    for i in range(dim):
-        for j in range(d):
-            orig_feature = x[:, j]
-            positional_encoding[:,j*2*dim+2*i] = torch.sin(2**i * torch.pi * orig_feature)
-            positional_encoding[:,j*2*dim+2*i+1] = torch.cos(2**i * torch.pi * orig_feature)
-    return positional_encoding
 
 
 def positional_encoding(x, dim=10):
     """project input to higher dimensional space as a positional encoding.
     """ 
-    n, d = x.shape
     positional_encoding = []    
     for i in range(dim):
         positional_encoding.append(torch.cos(2**i * torch.pi * x))
@@ -31,8 +18,43 @@ def positional_encoding(x, dim=10):
     positional_encoding = torch.cat(positional_encoding, dim=1)
     return positional_encoding
 
+class NeRFNetwork(LightningModule):
+    def __init__(self, position_dim=10, density_dim=4, coarse_samples=64,
+        fine_samples=128):
+        super(NeRFNetwork, self).__init__()
+        self.position_dim = position_dim
+        self.density_dim = density_dim
+        self.coarse_samples = coarse_samples
+        self.fine_samples = fine_samples
+        self.coarse_network = NeRFModel(position_dim, density_dim)
+        self.fine_network = NeRFModel(position_dim, density_dim)
+
+    def forward(self, o_rays, d_rays):
+        coarse_samples, ts = nerf_helpers.generate_coarse_samples(o_rays, d_rays, self.coarse_samples)
+        coarse_density, coarse_rgb =self.coarse_network(coarse_samples, d_rays)
+        deltas = nerf_helpers.generate_deltas(ts)
+
+
+
+    def configure_optimizers(self):
+        optimizer = torch.optim.Adam(self.parameters(), lr=5e-4)
+        return optimizer
+
+    def training_step(self, train_batch, batch_idx):
+        o_rays = train_batch['origin'] 
+        d_rays = train_batch['direc']
+        rgba =  train_batch['rgba']
+        pred_rgb = self.forward(o_rays, d_rays)
+        loss = F.mse_loss(pred_rgb, rgba)
+        self.log('train_loss', loss)
+        return loss
+
+    def validation_step(self, val_batch, batch_idx):
+        pass
+
 
 class NeRFModel(nn.Module):
+
     def __init__(self, position_dim=10, density_dim=4): 
         super(NeRFModel, self).__init__()
         self.position_dim = position_dim
