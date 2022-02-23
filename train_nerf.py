@@ -5,9 +5,10 @@ import dataloader
 import nerf_model 
 import argparse
 
-def train_simple_image(im_path, logger_name, steps, pos_enc): 
+def train_simple_image(im_path, logger_name, steps, pos_enc, use_gpu, args): 
     wandb_logger = WandbLogger(name=f"{logger_name}", project="NeRF")
-    trainer = Trainer(gpus=1, default_root_dir="/home/nakuram/CSEP573-NeRF/experiments/", max_steps=steps, logger=wandb_logger,
+    wandb_logger.log_hyperparams(args)
+    trainer = Trainer(gpus=int(use_gpu), default_root_dir="/home/nakuram/CSEP573-NeRF/experiments/", max_steps=steps, logger=wandb_logger,
         check_val_every_n_epoch=10)
     train_dl = dataloader.getPhotoDataloader(im_path, batch_size=4096, num_workers=8, shuffle=True)
     val_dl = dataloader.getValDataloader(im_path, batch_size=1, num_workers=8, shuffle=False)
@@ -21,7 +22,8 @@ if __name__ == '__main__':
     parser.add_argument('-i', '--im_path', type=str, default='./tests/test_data/grad_lounge.png',
         help='The image path to use as data')
     parser.add_argument('-p', '--position_encoding', type=int, default=10, help='position encoding length')
-    
+    parser.add_argument('--gpu', action='store_true')
     args = parser.parse_args()
-    train_simple_image(args.im_path, args.name, args.steps, args.position_encoding)
+
+    train_simple_image(args.im_path, args.name, args.steps, args.position_encoding, args.gpu, args)
 
