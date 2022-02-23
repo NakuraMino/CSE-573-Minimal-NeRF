@@ -64,27 +64,29 @@ def convert_to_ndc_rays(o_rays, d_rays, focal, width, height, near=1.0):
 
 class SyntheticDataset(Dataset):
 
-    def __init__(self, base_dir, tvt, num_rays): 
-        self._setup(base_dir, tvt, num_rays)
-        self.data = json.load(open(f'{self.base_dir}transforms_{tvt}.json'))
+    def __init__(self, base_dir, tvt, num_rays, height, width): 
+        self._setup(base_dir, tvt, num_rays, height, width)
+        file = open(f'{self.base_dir}transforms_{tvt}.json')
+        self.data = json.load(file)
         self.camera_angle = self.data['camera_angle_x']
         self.focal = 0.5 * self.W / np.tan(0.5 * self.camera_angle)
         self.frames = self.data['frames']
         self._preprocess()
+        file.close()
 
-    def _setup(self, base_dir, tvt, num_rays): 
-        self.H = 800
-        self.W = 800
+    def _setup(self, base_dir, tvt, num_rays, height, width): 
+        self.H = height
+        self.W = width
         self.tvt = tvt
         self.num_rays = num_rays
         self.base_dir = base_dir
-        self.origin = torch.Tensor([[0,0,0,1]]).T
 
     def _preprocess(self):
         for f in self.frames:
             f['cam_to_world'] = torch.Tensor(f['transform_matrix']) 
             im_path = Path(self.base_dir, f"{f['file_path']}.png")
             f['image'] = image_to_tensor(np.array(Image.open(im_path)) / 255.0) # [4xHxW]
+            print(f['image'].shape)
             # [HxWx3]
             f['o_rays'], f['d_rays'] = get_rays(self.H, self.W, self.focal, f['cam_to_world']) 
             # [HxWx3]
@@ -107,8 +109,8 @@ class SyntheticDataset(Dataset):
         direction = frame['d_ndc_rays'][xs, ys, :]
         return {'origin': origin, 'direc': direction, 'rgba': rgba}
 
-def getSyntheticDataloader(base_dir, tvt, num_rays, num_workers=8, shuffle=True): 
-    dataset = SyntheticDataset(base_dir, tvt, num_rays)
+def getSyntheticDataloader(base_dir, tvt, num_rays, width, height, num_workers=8, shuffle=True): 
+    dataset = SyntheticDataset(base_dir, tvt, num_rays, width, height)
     return DataLoader(dataset=dataset, batch_size=1, shuffle=shuffle, num_workers=num_workers)
 
 class PhotoDataset(Dataset):
@@ -118,6 +120,7 @@ class PhotoDataset(Dataset):
         im = np.array(Image.open(im_path)) / 255.0
         self.im = image_to_tensor(im) # C x H x W
         self.C, self.H, self.W = self.im.shape 
+        del im
 
     def __len__(self):
         return self.H * self.W
