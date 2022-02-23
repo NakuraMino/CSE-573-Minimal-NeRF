@@ -22,17 +22,6 @@ def sample_random_coordinates(N, height, width):
     xs = torch.randint(0, height, size=(N,))
     ys = torch.randint(0, width, size=(N,))
     return xs, ys
-    # cam_coords = torch.stack([xs, ys], axis=-1)
-    # return cam_coords
-
-def np_get_rays(H, W, focal, c2w):
-    """Get ray origins, directions from a pinhole camera."""
-    i, j = np.meshgrid(np.arange(W, dtype=np.float32),
-                       np.arange(H, dtype=np.float32), indexing='xy')
-    dirs = np.stack([(i-W*.5)/focal, -(j-H*.5)/focal, -np.ones_like(i)], -1)
-    rays_d = np.sum(dirs[..., np.newaxis, :] * c2w[:3, :3], -1)
-    rays_o = np.broadcast_to(c2w[:3, -1], np.shape(rays_d))
-    return rays_o, rays_d
 
 def get_rays(H, W, focal, c2w):
     """Get ray origins, directions from a pinhole camera."""
