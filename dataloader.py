@@ -86,7 +86,6 @@ class SyntheticDataset(Dataset):
             f['cam_to_world'] = torch.Tensor(f['transform_matrix']) 
             im_path = Path(self.base_dir, f"{f['file_path']}.png")
             f['image'] = image_to_tensor(np.array(Image.open(im_path)) / 255.0) # [4xHxW]
-            print(f['image'].shape)
             # [HxWx3]
             f['o_rays'], f['d_rays'] = get_rays(self.H, self.W, self.focal, f['cam_to_world']) 
             # [HxWx3]
