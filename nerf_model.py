@@ -33,14 +33,24 @@ class NeRFNetwork(LightningModule):
         coarse_samples, ts = nerf_helpers.generate_coarse_samples(o_rays, d_rays, self.coarse_samples)
         coarse_density, coarse_rgb =self.coarse_network(coarse_samples, d_rays)
         deltas = nerf_helpers.generate_deltas(ts)
+        weights = nerf_helpers.calculate_unnormalized_weights(coarse_density, deltas)
 
+        fine_samples = nerf_helpers.compute_inverse_transform_samples(weights)
+        all_samples = torch.cat([fine_samples, coarse_samples], axis=1)
+        all_density, all_rgb = self.fine_network(all_samples, d_rays)
 
+        
+        deltas = nerf_helpers.generate_deltas(ts)
+        weights = nerf_helpers.calculate_unnormalized_weights(all_density, deltas)
+        rgb_pred = nerf_helpers.estimate_ray_color(all_density, all_rgb, deltas)
+        return rgb_pred
 
     def configure_optimizers(self):
         optimizer = torch.optim.Adam(self.parameters(), lr=5e-4)
         return optimizer
 
     def training_step(self, train_batch, batch_idx):
+        nerf_helpers.fix_batchify(train_batch)
         o_rays = train_batch['origin'] 
         d_rays = train_batch['direc']
         rgba =  train_batch['rgba']
@@ -50,6 +60,7 @@ class NeRFNetwork(LightningModule):
         return loss
 
     def validation_step(self, val_batch, batch_idx):
+        nerf_helpers.fix_batchify(val_batch)
         pass
 
 
@@ -71,15 +82,18 @@ class NeRFModel(nn.Module):
             nn.ReLU()
         )
 
-        self.density_fn = nn.Sequential(
+        self.feature_fn = nn.Sequential(
             nn.Linear(256 + 60, 256),
             nn.ReLU(),
             nn.Linear(256, 256),
             nn.ReLU(),
             nn.Linear(256, 256),
             nn.ReLU(),
-            nn.Linear(256, 256 + 1),  # density is a separate value
-            # no activation function for density
+        )
+
+        self.density_fn = nn.Sequential(
+            nn.Linear(256, 1),
+            nn.ReLU()  # rectified to ensure nonnegative density
         )
 
         self.rgb_fn = nn.Sequential(
@@ -97,13 +111,11 @@ class NeRFModel(nn.Module):
         x_features = self.mlp(pos_enc_x)
         x_features = torch.cat((x_features, pos_enc_x), dim=1)
         # concatenate positional encodings again
-        density_and_features = self.density_fn(x_features)
-        density = density_and_features[:, 0].unsqueeze(axis=-1)
+        x_features = self.feature_fn(x_features)
+        density = self.density_fn(x_features)
         # final rgb predictor
-        features = density_and_features[:, 1:]
-        features = torch.cat((features, pos_enc_d), dim=1)
-        rgb = self.rgb_fn(features)
-
+        dim_features = torch.cat((x_features, pos_enc_d), dim=1)
+        rgb = self.rgb_fn(dim_features)
         return density, rgb
 
 
