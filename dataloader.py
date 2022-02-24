@@ -95,7 +95,6 @@ class SyntheticDataset(Dataset):
             del f['rotation']; f.pop('rotation', None)
             del f['transform_matrix']; f.pop('rotation', None)
 
-
     def __len__(self):
         return len(self.frames)
 
