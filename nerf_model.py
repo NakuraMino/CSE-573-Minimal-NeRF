@@ -10,39 +10,54 @@ from PIL import Image
 
 def positional_encoding(x, dim=10):
     """project input to higher dimensional space as a positional encoding.
-    """ 
+
+    Args:
+        x: [N x ... x C] Tensor of input floats. 
+    Returns: 
+        positional_encoding: [N x ... x 2*dim*C] Tensor of higher 
+                             dimensional representation of inputs.
+    """
     positional_encoding = []    
     for i in range(dim):
         positional_encoding.append(torch.cos(2**i * torch.pi * x))
         positional_encoding.append(torch.sin(2**i * torch.pi * x))
-    positional_encoding = torch.cat(positional_encoding, dim=1)
+    positional_encoding = torch.cat(positional_encoding, dim=-1)
     return positional_encoding
 
 class NeRFNetwork(LightningModule):
-    def __init__(self, position_dim=10, density_dim=4, coarse_samples=64,
-        fine_samples=128):
+    def __init__(self, position_dim=10, direction_dim=4, coarse_samples=64,
+                 fine_samples=128):
         super(NeRFNetwork, self).__init__()
         self.position_dim = position_dim
-        self.density_dim = density_dim
+        self.direction_dim = direction_dim
         self.coarse_samples = coarse_samples
         self.fine_samples = fine_samples
-        self.coarse_network = NeRFModel(position_dim, density_dim)
-        self.fine_network = NeRFModel(position_dim, density_dim)
+        self.coarse_network = NeRFModel(position_dim, direction_dim)
+        self.fine_network = NeRFModel(position_dim, direction_dim)
 
     def forward(self, o_rays, d_rays):
-        coarse_samples, ts = nerf_helpers.generate_coarse_samples(o_rays, d_rays, self.coarse_samples)
+        # calculating coarse
+        coarse_samples, coarse_ts = nerf_helpers.generate_coarse_samples(o_rays, d_rays, self.coarse_samples)
         coarse_density, coarse_rgb =self.coarse_network(coarse_samples, d_rays)
-        deltas = nerf_helpers.generate_deltas(ts)
-        weights = nerf_helpers.calculate_unnormalized_weights(coarse_density, deltas)
+        coarse_deltas = nerf_helpers.generate_deltas(coarse_ts)
 
-        fine_samples = nerf_helpers.compute_inverse_transform_samples(weights)
-        all_samples = torch.cat([fine_samples, coarse_samples], axis=1)
-        all_density, all_rgb = self.fine_network(all_samples, d_rays)
+        weights = nerf_helpers.calculate_unnormalized_weights(coarse_density, coarse_deltas)
+        fine_samples, fine_ts = nerf_helpers.inverse_transform_sampling(o_rays, d_rays, weights, 
+                                                                        coarse_ts, self.fine_samples)
+        # fine_deltas = nerf_helpers.generate(fine_ts)
+        fine_samples = torch.cat([fine_samples, coarse_samples], axis=1)
+        fine_ts = torch.cat([fine_ts, coarse_ts], axis=1)
+        fine_density, fine_rgb = self.fine_network(fine_samples, d_rays)
 
+        # TODO: This is wrong because the densities have to be sorted I think? or else the deltas are incorrect
+        all_ts = torch.cat([coarse_ts, fine_ts], dim=1)
+        # all_ts, idxs = torch.sort(all_ts, dim=1)
+        all_density = torch.cat([coarse_density, fine_density], dim=1)
+        all_rgb = torch.cat([coarse_rgb, fine_rgb], dim=1)
         
-        deltas = nerf_helpers.generate_deltas(ts)
-        weights = nerf_helpers.calculate_unnormalized_weights(all_density, deltas)
-        rgb_pred = nerf_helpers.estimate_ray_color(all_density, all_rgb, deltas)
+        all_deltas = nerf_helpers.generate_deltas(all_ts)
+        all_weights = nerf_helpers.calculate_unnormalized_weights(all_density, all_deltas)
+        rgb_pred = nerf_helpers.estimate_ray_color(all_weights, all_rgb)
         return rgb_pred
 
     def configure_optimizers(self):
@@ -61,15 +76,21 @@ class NeRFNetwork(LightningModule):
 
     def validation_step(self, val_batch, batch_idx):
         nerf_helpers.fix_batchify(val_batch)
-        pass
+        o_rays = val_batch['origin'] 
+        d_rays = val_batch['direc']
+        rgba =  val_batch['rgba']
+        pred_rgb = self.forward(o_rays, d_rays)
+        loss = F.mse_loss(pred_rgb, rgba)
+        self.log('val_loss', loss)
+        return loss
 
 
 class NeRFModel(nn.Module):
 
-    def __init__(self, position_dim=10, density_dim=4): 
+    def __init__(self, position_dim=10, direction_dim=4): 
         super(NeRFModel, self).__init__()
         self.position_dim = position_dim
-        self.density_dim = density_dim
+        self.direction_dim = direction_dim
         # first MLP is a simple multi-layer perceptron 
         self.mlp = nn.Sequential(
             nn.Linear(60, 256),
@@ -104,17 +125,19 @@ class NeRFModel(nn.Module):
         )
 
     def forward(self, x, d): 
+        # direction needs to be broadcasted since it hasn't been sampled
+        d = torch.broadcast_to(d[:, None, :], x.shape)
         # positional encodings
         pos_enc_x = positional_encoding(x, dim=self.position_dim)
-        pos_enc_d = positional_encoding(d, dim=self.density_dim)
+        pos_enc_d = positional_encoding(d, dim=self.direction_dim)
         # feed forward network
         x_features = self.mlp(pos_enc_x)
-        x_features = torch.cat((x_features, pos_enc_x), dim=1)
         # concatenate positional encodings again
+        x_features = torch.cat((x_features, pos_enc_x), dim=-1)
         x_features = self.feature_fn(x_features)
         density = self.density_fn(x_features)
         # final rgb predictor
-        dim_features = torch.cat((x_features, pos_enc_d), dim=1)
+        dim_features = torch.cat((x_features, pos_enc_d), dim=-1)
         rgb = self.rgb_fn(dim_features)
         return density, rgb
 

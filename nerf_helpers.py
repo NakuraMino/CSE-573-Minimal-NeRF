@@ -20,15 +20,15 @@ def generate_coarse_samples(o_rays: torch.Tensor, d_rays: torch.Tensor, num_samp
         num_samples: The number of coordinates to sample from the ray.
     Returns:
         Samples: [N x num_samples x 3] tensor of coordinates. 
-        ts: [N x num_samples x 1] is the increment between each sample. 
+        ts: [N x num_samples x 1] tensor of the time increment for each sample. 
     """
     N, _ = o_rays.shape
     o_rays = o_rays.unsqueeze(1)
     d_rays = d_rays.unsqueeze(1)
-    ts, _ = torch.meshgrid(torch.arange(num_samples), torch.arange(N), indexing='xy')
-    del _ 
+    ts = torch.broadcast_to(torch.linspace(0,(num_samples-1)/num_samples, num_samples)[None, ...], 
+                            (N, num_samples))
     rand = torch.rand(ts.shape)
-    ts = (ts + rand) / num_samples
+    ts = ts + (rand / num_samples)
     ts = ts.unsqueeze(-1)
     samples = d_rays * ts + o_rays
     return samples, ts
@@ -46,7 +46,6 @@ def generate_deltas(ts: torch.Tensor):
     upper_bound = torch.cat([ts[:,1:,:], torch.ones((N, 1, 1))], dim=1)
     deltas = upper_bound - ts
     return deltas
-
 
 def calculate_unnormalized_weights(density: torch.Tensor, deltas: torch.Tensor):
     """Calculate unnormalized weights for the ray color.
@@ -75,3 +74,49 @@ def estimate_ray_color(weights, rgb):
     """
     ray_color = torch.sum(weights * rgb, dim=1)
     return ray_color
+
+
+def inverse_transform_sampling(o_rays: torch.Tensor, d_rays: torch.Tensor, weights, ts, num_samples):
+    """Performs inverse transform sampling according to the weights.
+
+    Samples from ts according to the weights (i.e. ts with higher weights are 
+    more likely to be sampled).
+    
+    Probably not the best implementation, since the official NeRF implementation 
+    does something different. This is probably good enough though? Good thing
+    I don't have to be rigorous. 
+
+    Args:
+        o_rays: [N x 3] coordinates of the ray origin.
+        d_rays: [N x 3] directions of the ray.
+        weights: [N x C x 1] tensor of weights calculated as 
+                 w = T(1 - exp(- density * delta)). N is the batch size, and C 
+                 is the number of coarse samples.
+        ts: [N x C x 1] is the increment between each sample. N is the batch 
+            size, and C is the number of coarse samples. 
+        num_samples: number of samples to return per ray.
+    Returns:
+        fine_samples: [N x num_samples x 3] tensor sampled according to weights.
+                      Instead of using the same values as in ts, we pertube it by 
+                      adding random noise (sampled from U(0, 1/num_samples)).
+        fine_ts: [N x num_samples x 1] tensor of the time increment for each sample. 
+    """
+    N, C, _ = ts.shape
+    o_rays = o_rays.unsqueeze(1)
+    d_rays = d_rays.unsqueeze(1)
+    
+    cdf = torch.cumsum(weights, axis=1)  # [N x C]
+    cdf = cdf / cdf[:,-1, None]
+    eps = torch.rand((N,1)) / num_samples  # low variance sampling
+    samples = torch.linspace(0, (num_samples - 1) / num_samples, num_samples)
+    samples = torch.broadcast_to(samples, (N, num_samples))
+    samples = samples + eps
+
+    cdf = torch.squeeze(cdf, -1)  # make dimensions match    
+    idxs = torch.searchsorted(cdf, samples).unsqueeze(-1)
+    idxs[idxs >= C] = C - 1
+    bins = torch.gather(ts, 1, idxs)
+    
+    fine_ts = bins + torch.rand((N, num_samples, 1)) / num_samples
+    fine_samples = o_rays + fine_ts * d_rays
+    return fine_samples, fine_ts

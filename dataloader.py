@@ -5,6 +5,7 @@ import torch
 from torch.utils.data import Dataset, DataLoader
 import numpy as np
 from PIL import Image
+import imageio
 import json
 from pathlib import Path
 
@@ -85,10 +86,8 @@ class SyntheticDataset(Dataset):
         for f in self.frames:
             f['cam_to_world'] = torch.Tensor(f['transform_matrix']) 
             im_path = Path(self.base_dir, f"{f['file_path']}.png")
-            f['image'] = image_to_tensor(np.array(Image.open(im_path)) / 255.0) # [4xHxW]
-            # [HxWx3]
-            f['o_rays'], f['d_rays'] = get_rays(self.H, self.W, self.focal, f['cam_to_world']) 
-            # [HxWx3]
+            f['image'] = (torch.Tensor(imageio.imread(im_path, pilmode="RGB")) / 255.0).float()  # [HxWx3]
+            f['o_rays'], f['d_rays'] = get_rays(self.H, self.W, self.focal, f['cam_to_world'])  # [HxWx3]
             f['o_ndc_rays'], f['d_ndc_rays'] = convert_to_ndc_rays(f['o_rays'], f['d_rays'],   
                                                                    self.focal, self.W, self.H,
                                                                    near=1.0)
@@ -102,10 +101,10 @@ class SyntheticDataset(Dataset):
         frame = self.frames[idx]
         # retrieve image 
         xs, ys = sample_random_coordinates(self.num_rays, self.H, self.W) # [Nx2]
-        rgba = frame['image'][:,xs,ys]
+        rgba = frame['image'][xs,ys,:]
         origin = frame['o_ndc_rays'][xs, ys, :]
         direction = frame['d_ndc_rays'][xs, ys, :]
-        return {'origin': origin, 'direc': direction, 'rgba': rgba}
+        return {'origin': origin, 'direc': direction, 'rgba': rgba, 'xs': xs, 'ys': ys}
 
 def getSyntheticDataloader(base_dir, tvt, num_rays, width, height, num_workers=8, shuffle=True): 
     dataset = SyntheticDataset(base_dir, tvt, num_rays, width, height)
