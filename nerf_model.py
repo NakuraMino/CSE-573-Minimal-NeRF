@@ -25,10 +25,24 @@ def positional_encoding(x, dim=10):
     return positional_encoding
 
 class NeRFNetwork(LightningModule):
-    """
+    """A full NeRF Network.
+
+    Pytorch-Lightning Wrapper to train both the coarse and the fine network
+    in one model. 
     """
     def __init__(self, position_dim=10, direction_dim=4, coarse_samples=64,
                  fine_samples=128):
+        """NeRF Constructor.
+
+        Args:
+            position_dim: the size of the position encoding. Resulting size will be 
+                input_size*2*position_dim.
+            direction_dim: the size of the direction encoding. Resulting size will be 
+                input_size*2*direction_dim.
+            coarse_samples: number of samples for the coarse network.
+            fine_samples: number of additional samples for the fine network. (i.e. fine network 
+                gets coarse+fine samples)
+        """
         super(NeRFNetwork, self).__init__()
         self.position_dim = position_dim
         self.direction_dim = direction_dim
@@ -44,7 +58,11 @@ class NeRFNetwork(LightningModule):
             o_rays: [N x 3] coordinates of the ray origin.
             d_rays: [N x 3] directions of the ray.
         Returns:
-            predicted rgb value of each ray.
+            dictionary with keys:
+                'pred_rgbs': [N x 3] tensor of predicted rgb value of each ray.
+                'all_rgb': [N x coarse*2+fine_samples x 3] rgb predictions at each location.
+                'all_density': [N x coarse*2+fine_samples x 1] density predictions.
+                'all_ts': [N x coarse*2+fine_samples x 1] time values along a ray direction.
         """
         # calculating coarse
         coarse_samples, coarse_ts = nerf_helpers.generate_coarse_samples(o_rays, d_rays, self.coarse_samples)
@@ -109,7 +127,15 @@ class NeRFModel(nn.Module):
     activation.
     """
 
-    def __init__(self, position_dim=10, direction_dim=4): 
+    def __init__(self, position_dim=10, direction_dim=4):
+        """NeRF Constructor.
+
+        Args:
+            position_dim: the size of the position encoding. Resulting size will be 
+                input_size*2*position_dim.
+            direction_dim: the size of the direction encoding. Resulting size will be 
+                input_size*2*direction_dim.
+        """
         super(NeRFModel, self).__init__()
         self.position_dim = position_dim
         self.direction_dim = direction_dim
@@ -146,26 +172,48 @@ class NeRFModel(nn.Module):
             nn.Sigmoid()
         )
 
-    def forward(self, x, d): 
+    def forward(self, samples, direc): 
+        """Forward pass through a NeRF Model (MLP).
+
+        Args:
+            samples: [N x samples x 3] coordinate locations to query the network.
+            direc: [N x 3] directions for each ray.
+        Returns: 
+            density: [N x samples x 1] density predictions.
+            rgb: [N x samples x 3] color/rgb predictions.
+        """
         # direction needs to be broadcasted since it hasn't been sampled
-        d = torch.broadcast_to(d[:, None, :], x.shape)
+        direc = torch.broadcast_to(direc[:, None, :], samples.shape)
         # positional encodings
-        pos_enc_x = positional_encoding(x, dim=self.position_dim)
-        pos_enc_d = positional_encoding(d, dim=self.direction_dim)
+        pos_enc_samples = positional_encoding(samples, dim=self.position_dim)
+        pos_enc_direc = positional_encoding(direc, dim=self.direction_dim)
         # feed forward network
-        x_features = self.mlp(pos_enc_x)
+        x_features = self.mlp(pos_enc_samples)
         # concatenate positional encodings again
-        x_features = torch.cat((x_features, pos_enc_x), dim=-1)
+        x_features = torch.cat((x_features, pos_enc_samples), dim=-1)
         x_features = self.feature_fn(x_features)
         density = self.density_fn(x_features)
         # final rgb predictor
-        dim_features = torch.cat((x_features, pos_enc_d), dim=-1)
+        dim_features = torch.cat((x_features, pos_enc_direc), dim=-1)
         rgb = self.rgb_fn(dim_features)
         return density, rgb
 
 
 class ImageNeRFModel(LightningModule):
-    def __init__(self, position_dim=10): 
+    """Toy NeRF model for 2D reconstruction.
+
+    Instead of reconstructing/learning a full 3D model, we only learn a single 
+    image. Input is a single pixel coordinate (x, y), and the output is an rgb
+    color.
+    """
+    def __init__(self, position_dim=10):
+        """Image NeRF Constructor.
+
+        Args:
+            position_dim: the size of the position encoding. Resulting size will be 
+                input_size*2*position_dim. if position_dim <= 0, then no encoding is
+                used.
+        """
         super(ImageNeRFModel, self).__init__()
         self.position_dim = position_dim
         # first MLP is a simple multi-layer perceptron 
@@ -192,6 +240,13 @@ class ImageNeRFModel(LightningModule):
         )
     
     def forward(self, x): 
+        """Forward pass.
+
+        Args: 
+            x: [N x 2] Tensor of coordinate locations.
+        Returns:
+            rgb: [N x 3] Tensor of colors.
+        """
         # positional encodings
         if self.position_dim > 0:
             x = positional_encoding(x, dim=self.position_dim)
@@ -211,6 +266,13 @@ class ImageNeRFModel(LightningModule):
         return loss
 
     def validation_step(self, val_batch, batch_idx):
+        """Reconstruct an image.
+
+        Unlike a traditional validation step, we query the network at
+        every pixel coordinate to get a reconstructed image and log it.
+        This just qualitatively helps us see whether the network is 
+        learning or not.
+        """
         im_h, im_w = val_batch
         im = photo_nerf_to_image(self, im_h, im_w)
         im = torch_to_numpy(im, is_normalized_image=True)
