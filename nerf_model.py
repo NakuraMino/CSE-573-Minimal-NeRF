@@ -25,6 +25,8 @@ def positional_encoding(x, dim=10):
     return positional_encoding
 
 class NeRFNetwork(LightningModule):
+    """
+    """
     def __init__(self, position_dim=10, direction_dim=4, coarse_samples=64,
                  fine_samples=128):
         super(NeRFNetwork, self).__init__()
@@ -36,6 +38,14 @@ class NeRFNetwork(LightningModule):
         self.fine_network = NeRFModel(position_dim, direction_dim)
 
     def forward(self, o_rays, d_rays):
+        """Single forward pass on both coarse and fine network.
+
+        Args:
+            o_rays: [N x 3] coordinates of the ray origin.
+            d_rays: [N x 3] directions of the ray.
+        Returns:
+            predicted rgb value of each ray.
+        """
         # calculating coarse
         coarse_samples, coarse_ts = nerf_helpers.generate_coarse_samples(o_rays, d_rays, self.coarse_samples)
         coarse_density, coarse_rgb =self.coarse_network(coarse_samples, d_rays)
@@ -49,16 +59,18 @@ class NeRFNetwork(LightningModule):
         fine_ts = torch.cat([fine_ts, coarse_ts], axis=1)
         fine_density, fine_rgb = self.fine_network(fine_samples, d_rays)
 
-        # TODO: This is wrong because the densities have to be sorted I think? or else the deltas are incorrect
+        # sort ts to be sequential (in order to calculate deltas correctly) and sort density and rgb to align.
         all_ts = torch.cat([coarse_ts, fine_ts], dim=1)
-        # all_ts, idxs = torch.sort(all_ts, dim=1)
-        all_density = torch.cat([coarse_density, fine_density], dim=1)
-        all_rgb = torch.cat([coarse_rgb, fine_rgb], dim=1)
-        
+        all_ts, idxs = torch.sort(all_ts, dim=1)        
+        all_density = torch.gather(torch.cat([coarse_density, fine_density], dim=1), 1, idxs)
+        idxs = torch.broadcast_to(idxs, list(all_density.shape[:-1]) + [3])
+        all_rgb = torch.gather(torch.cat([coarse_rgb, fine_rgb], dim=1), 1, idxs)
+
+        # calculate ray color.
         all_deltas = nerf_helpers.generate_deltas(all_ts)
         all_weights = nerf_helpers.calculate_unnormalized_weights(all_density, all_deltas)
-        rgb_pred = nerf_helpers.estimate_ray_color(all_weights, all_rgb)
-        return rgb_pred
+        pred_rgbs = nerf_helpers.estimate_ray_color(all_weights, all_rgb)
+        return {'pred_rgbs': pred_rgbs, 'all_rgb': all_rgb, 'all_density': all_density, 'all_ts': all_ts}
 
     def configure_optimizers(self):
         optimizer = torch.optim.Adam(self.parameters(), lr=5e-4)
@@ -69,7 +81,8 @@ class NeRFNetwork(LightningModule):
         o_rays = train_batch['origin'] 
         d_rays = train_batch['direc']
         rgba =  train_batch['rgba']
-        pred_rgb = self.forward(o_rays, d_rays)
+        pred_dict = self.forward(o_rays, d_rays)
+        pred_rgb = pred_dict['pred_rgbs']
         loss = F.mse_loss(pred_rgb, rgba)
         self.log('train_loss', loss)
         return loss
@@ -79,13 +92,22 @@ class NeRFNetwork(LightningModule):
         o_rays = val_batch['origin'] 
         d_rays = val_batch['direc']
         rgba =  val_batch['rgba']
-        pred_rgb = self.forward(o_rays, d_rays)
+        pred_dict = self.forward(o_rays, d_rays)
+        pred_rgb = pred_dict['pred_rgbs']
         loss = F.mse_loss(pred_rgb, rgba)
         self.log('val_loss', loss)
         return loss
 
 
 class NeRFModel(nn.Module):
+    """A single NeRF model.
+
+    A single NeRF model (used for both coarse and fine networks) is made up of an
+    8-layer multi-layer perceptron with ReLU activation functions. The input is a
+    position and direction (each of which are 3 values), while the output is a
+    scalar density and rgb value. The final layer predicting the rgb uses a sigmoid
+    activation.
+    """
 
     def __init__(self, position_dim=10, direction_dim=4): 
         super(NeRFModel, self).__init__()
