@@ -47,7 +47,7 @@ if __name__ == '__main__':
     simple_parser.add_argument('-i', '--im_path', type=str, default='./tests/test_data/grad_lounge.png',
         help='The image path to use as data')
 
-    full_parser.add_argument('-d', '--direction_encoding', type=int, default=10, help='direction encoding length')
+    full_parser.add_argument('-d', '--direction_encoding', type=int, default=4, help='direction encoding length')
     full_parser.add_argument('-b', '--base_dir', type=str, default='/home/nakuram/CSEP573-NeRF/data/nerf_synthetic/lego/', help='directory for dataset')
     full_parser.add_argument('-r', '--rays', type=int, default=4096, help='number of rays per batch')
     full_parser.add_argument('-c', '--coarse', type=int, default=64, help='number of coarse samples')

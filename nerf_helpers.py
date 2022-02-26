@@ -110,7 +110,7 @@ def inverse_transform_sampling(o_rays: torch.Tensor, d_rays: torch.Tensor, weigh
     cdf = torch.cumsum(weights, axis=1)  # [N x C]
     cdf = cdf / cdf[:,-1, None]
     eps = torch.rand((N,1), device=device) / num_samples  # low variance sampling
-    samples = torch.linspace(0, (num_samples - 1) / num_samples, num_samples, device)
+    samples = torch.linspace(0, (num_samples - 1) / num_samples, num_samples, device=device)
     samples = torch.broadcast_to(samples, (N, num_samples))
     samples = samples + eps
 

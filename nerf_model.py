@@ -167,7 +167,7 @@ class NeRFModel(nn.Module):
         self.direction_dim = direction_dim
         # first MLP is a simple multi-layer perceptron 
         self.mlp = nn.Sequential(
-            nn.Linear(60, 256),
+            nn.Linear(self.position_dim*2*3, 256),
             nn.ReLU(),
             nn.Linear(256, 256),
             nn.ReLU(),
@@ -178,7 +178,7 @@ class NeRFModel(nn.Module):
         )
 
         self.feature_fn = nn.Sequential(
-            nn.Linear(256 + 60, 256),
+            nn.Linear(256 + self.position_dim*2*3, 256),
             nn.ReLU(),
             nn.Linear(256, 256),
             nn.ReLU(),
@@ -192,7 +192,7 @@ class NeRFModel(nn.Module):
         )
 
         self.rgb_fn = nn.Sequential(
-            nn.Linear(256 + 24, 128),
+            nn.Linear(256 + self.direction_dim*2*3, 128),
             nn.ReLU(),
             nn.Linear(128, 3),
             nn.Sigmoid()
@@ -210,11 +210,9 @@ class NeRFModel(nn.Module):
         """
         # direction needs to be broadcasted since it hasn't been sampled
         direc = torch.broadcast_to(direc[:, None, :], samples.shape)
-        print("hi", direc.shape)
         # positional encodings
         pos_enc_samples = positional_encoding(samples, dim=self.position_dim)
         pos_enc_direc = positional_encoding(direc, dim=self.direction_dim)
-        print("bye", pos_enc_direc.shape)
         # feed forward network
         x_features = self.mlp(pos_enc_samples)
         # concatenate positional encodings again
@@ -223,7 +221,6 @@ class NeRFModel(nn.Module):
         density = self.density_fn(x_features)
         # final rgb predictor
         dim_features = torch.cat((x_features, pos_enc_direc), dim=-1)
-        print("okay", dim_features.shape)
         rgb = self.rgb_fn(dim_features)
         return density, rgb
 
