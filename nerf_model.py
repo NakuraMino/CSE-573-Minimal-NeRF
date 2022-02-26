@@ -51,6 +51,7 @@ class NeRFNetwork(LightningModule):
         self.coarse_network = NeRFModel(position_dim, direction_dim)
         self.fine_network = NeRFModel(position_dim, direction_dim)
         self.im_idx = 0
+        self.max_idx = 1
 
     def forward(self, o_rays, d_rays):
         """Single forward pass on both coarse and fine network.
@@ -115,9 +116,9 @@ class NeRFNetwork(LightningModule):
         return loss
 
     def validation_step(self, val_batch, batch_idx):
+        self.max_idx = max(self.max_idx, batch_idx)
         if batch_idx == 0:
-            # TODO: 99 is a magic number. Assumes validation set size is 100
-            self.im_idx = random.randint(0, 99)
+            self.im_idx = random.randint(0, self.max_idx)
         nerf_helpers.fix_batchify(val_batch)
         # Regular Validation Step
 
@@ -151,7 +152,7 @@ class NeRFNetwork(LightningModule):
             im = torch.cat(im, dim=0).view((H,W, C))
             im = torch_to_numpy(im, is_normalized_image=True)
             # Image.fromarray(im.astype(np.uint8)).save('./val.png')
-            self.logger.log_image(key='recon', images=[im])
+            self.logger.log_image(key='recon', images=[im], caption=[str(self.im_idx)])
             del im
         return loss
 
