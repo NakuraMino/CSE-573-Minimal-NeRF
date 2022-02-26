@@ -6,7 +6,7 @@ from pytorch_lightning import LightningModule
 from nerf_to_recon import photo_nerf_to_image, torch_to_numpy
 import nerf_helpers
 from PIL import Image
-
+import random
 
 def positional_encoding(x, dim=10):
     """project input to higher dimensional space as a positional encoding.
@@ -50,6 +50,7 @@ class NeRFNetwork(LightningModule):
         self.fine_samples = fine_samples
         self.coarse_network = NeRFModel(position_dim, direction_dim)
         self.fine_network = NeRFModel(position_dim, direction_dim)
+        self.im_idx = 0
 
     def forward(self, o_rays, d_rays):
         """Single forward pass on both coarse and fine network.
@@ -98,16 +99,25 @@ class NeRFNetwork(LightningModule):
 
     def training_step(self, train_batch, batch_idx):
         nerf_helpers.fix_batchify(train_batch)
+        # inputs
         o_rays = train_batch['origin'] 
         d_rays = train_batch['direc']
         rgba =  train_batch['rgba']
+        
+        # forward pass
         pred_dict = self.forward(o_rays, d_rays)
         pred_rgb = pred_dict['pred_rgbs']
+        
+        # loss
+        N, _ = pred_rgb.shape
         loss = F.mse_loss(pred_rgb, rgba)
-        self.log('train_loss', loss)
+        self.log('train_loss', loss, batch_size=N)
         return loss
 
     def validation_step(self, val_batch, batch_idx):
+        if batch_idx == 0:
+            # TODO: 99 is a magic number. Assumes validation set size is 100
+            self.im_idx = random.randint(0, 99)
         nerf_helpers.fix_batchify(val_batch)
         # Regular Validation Step
 
@@ -121,25 +131,28 @@ class NeRFNetwork(LightningModule):
         pred_rgbs = pred_dict['pred_rgbs']
         
         # loss
+        N, _ = pred_rgbs.shape
         loss = F.mse_loss(pred_rgbs, rgba)
-        self.log('val_loss', loss)
+        self.log('val_loss', loss, batch_size=N)
 
         # TODO: Render image. For now lets just see what colors the rays are.
         # feel like this will OOM at some point...
-        all_o_rays = val_batch['all_origin']
-        all_d_rays = val_batch['all_direc']
-        H, W, C = all_o_rays.shape
-        all_o_rays = all_o_rays.view((H*W, C))
-        all_d_rays = all_d_rays.view((H*W, C))
-        im = []
-        for i in range(0, H*W, 4096): 
-            recon_preds = self.forward(all_o_rays[i:min(H*W,i+4096),:], all_d_rays[i:min(H*W,i+4096),:])
-            im.append(recon_preds['pred_rgbs'])
+        if batch_idx == self.im_idx:
+            all_o_rays = val_batch['all_origin']
+            all_d_rays = val_batch['all_direc']
+            H, W, C = all_o_rays.shape
+            all_o_rays = all_o_rays.view((H*W, C))
+            all_d_rays = all_d_rays.view((H*W, C))
+            im = []
+            for i in range(0, H*W, N): 
+                recon_preds = self.forward(all_o_rays[i:min(H*W,i+N),:], all_d_rays[i:min(H*W,i+N),:])
+                im.append(recon_preds['pred_rgbs'])
 
-        im = torch.cat(im, dim=0).view((H,W, C))
-        im = torch_to_numpy(im, is_normalized_image=True)
-        # Image.fromarray(im.astype(np.uint8)).save('./val.png')
-        self.logger.log_image(key='recon', images=[im])
+            im = torch.cat(im, dim=0).view((H,W, C))
+            im = torch_to_numpy(im, is_normalized_image=True)
+            # Image.fromarray(im.astype(np.uint8)).save('./val.png')
+            self.logger.log_image(key='recon', images=[im])
+            del im
         return loss
 
 

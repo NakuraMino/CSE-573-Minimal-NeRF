@@ -33,6 +33,7 @@ def generate_coarse_samples(o_rays: torch.Tensor, d_rays: torch.Tensor, num_samp
     ts = ts + (rand / num_samples)
     ts = ts.unsqueeze(-1)
     samples = d_rays * ts + o_rays
+    del rand
     return samples, ts
 
 def generate_deltas(ts: torch.Tensor):
@@ -47,6 +48,7 @@ def generate_deltas(ts: torch.Tensor):
     N, _, _ = ts.shape
     upper_bound = torch.cat([ts[:,1:,:], torch.ones((N, 1, 1), device=device)], dim=1)
     deltas = upper_bound - ts
+    del upper_bound
     return deltas
 
 def calculate_unnormalized_weights(density: torch.Tensor, deltas: torch.Tensor):
@@ -62,6 +64,7 @@ def calculate_unnormalized_weights(density: torch.Tensor, deltas: torch.Tensor):
     neg_delta_density = - 1 * density * deltas
     transparency =  torch.exp(torch.cumsum(- 1 * neg_delta_density, dim=1))
     weights = (1 - torch.exp(neg_delta_density)) * transparency
+    del transparency
     return weights
 
 def estimate_ray_color(weights, rgb):
@@ -121,4 +124,5 @@ def inverse_transform_sampling(o_rays: torch.Tensor, d_rays: torch.Tensor, weigh
     
     fine_ts = bins + torch.rand((N, num_samples, 1), device=device) / num_samples
     fine_samples = o_rays + fine_ts * d_rays
+    del cdf, idxs, bins, samples, eps
     return fine_samples, fine_ts
