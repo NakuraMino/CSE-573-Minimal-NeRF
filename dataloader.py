@@ -84,15 +84,14 @@ class SyntheticDataset(Dataset):
 
     def _preprocess(self):
         for f in self.frames:
-            f['cam_to_world'] = torch.Tensor(f['transform_matrix']) 
-            im_path = Path(self.base_dir, f"{f['file_path']}.png")
-            f['image'] = (torch.Tensor(imageio.imread(im_path, pilmode="RGB")) / 255.0).float()  # [HxWx3]
-            f['o_rays'], f['d_rays'] = get_rays(self.H, self.W, self.focal, f['cam_to_world'])  # [HxWx3]
-            f['o_ndc_rays'], f['d_ndc_rays'] = convert_to_ndc_rays(f['o_rays'], f['d_rays'],   
-                                                                   self.focal, self.W, self.H,
-                                                                   near=1.0)
+            f['file_path'] = Path(self.base_dir, f"{f['file_path']}.png")            
+            # f['cam_to_world'] = torch.Tensor(f['transform_matrix']) 
+            # f['image'] = (torch.Tensor(imageio.imread(im_path, pilmode="RGB")) / 255.0).float()  # [HxWx3]
+            # f['o_rays'], f['d_rays'] = get_rays(self.H, self.W, self.focal, f['cam_to_world'])  # [HxWx3]
+            # f['o_ndc_rays'], f['d_ndc_rays'] = convert_to_ndc_rays(f['o_rays'], f['d_rays'],   
+            #                                                        self.focal, self.W, self.H,
+            #                                                        near=1.0)
             del f['rotation']; f.pop('rotation', None)
-            del f['transform_matrix']; f.pop('transform_matrix', None)
 
     def __len__(self):
         return len(self.frames)
@@ -101,14 +100,21 @@ class SyntheticDataset(Dataset):
         frame = self.frames[idx]
         # retrieve image 
         xs, ys = sample_random_coordinates(self.num_rays, self.H, self.W) # [Nx2]
-        rgba = frame['image'][xs,ys,:]
-        origin = frame['o_ndc_rays'][xs, ys, :]
-        direction = frame['d_ndc_rays'][xs, ys, :]
+        image = (torch.Tensor(imageio.imread(frame['file_path'], pilmode="RGB")) / 255.0).float()  # [HxWx3]
+        cam_to_world = torch.Tensor(frame['transform_matrix']) 
+        o_rays, d_rays = get_rays(self.H, self.W, self.focal, cam_to_world)  # [HxWx3]
+        o_ndc_rays, d_ndc_rays = convert_to_ndc_rays(o_rays, d_rays, self.focal, 
+                                                     self.W, self.H, near=1.0)
+        rgb = image[xs,ys,:]
+        origin = o_ndc_rays[xs, ys, :]
+        direction = d_ndc_rays[xs, ys, :]
+
+        del image, cam_to_world, o_rays, d_rays
         if self.tvt == 'train':
-            return {'origin': origin, 'direc': direction, 'rgba': rgba, 'xs': xs, 'ys': ys}
+            return {'origin': origin, 'direc': direction, 'rgba': rgb, 'xs': xs, 'ys': ys}
         else: 
-            return {'origin': origin, 'direc': direction, 'rgba': rgba, 'xs': xs, 'ys': ys, 
-                    'all_origin': frame['o_ndc_rays'], 'all_direc': frame['d_ndc_rays']}
+            return {'origin': origin, 'direc': direction, 'rgba': rgb, 'xs': xs, 'ys': ys, 
+                    'all_origin': o_ndc_rays, 'all_direc': d_ndc_rays}
 
 def getSyntheticDataloader(base_dir, tvt, num_rays, num_workers=8, shuffle=True): 
     dataset = SyntheticDataset(base_dir, tvt, num_rays)
