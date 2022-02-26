@@ -45,7 +45,7 @@ def generate_deltas(ts: torch.Tensor):
         deltas: [N x num_samples x 1]  where delta_i = t_i+1 - t_i. Last t_i+1=1.
     """
     N, _, _ = ts.shape
-    upper_bound = torch.cat([ts[:,1:,:], torch.ones((N, 1, 1))], dim=1)
+    upper_bound = torch.cat([ts[:,1:,:], torch.ones((N, 1, 1), device=device)], dim=1)
     deltas = upper_bound - ts
     return deltas
 
