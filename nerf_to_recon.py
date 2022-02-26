@@ -7,14 +7,14 @@ import nerf_model
 def torch_to_numpy(torch_tensor, is_normalized_image = False):
     """ Converts torch tensor (...CHW) to numpy tensor (...HWC) for plotting
     
-        If it's an rgb image, it puts it back in [0,255] range
+        If it's a normalized image, it puts it back in [0,255] range
     """
     np_tensor = torch_tensor.cpu().clone().detach().numpy()
     if np_tensor.ndim >= 4: # ...CHW -> ...HWC
         np_tensor = np.moveaxis(np_tensor, [-3,-2,-1], [-1,-3,-2])
     if is_normalized_image:
         np_tensor *= 255
-    np_tensor = np.clip(np_tensor, 0, 255)
+        np_tensor = np.clip(np_tensor, 0, 255)
     return np_tensor
 
 def save_torch_as_image(torch_tensor, file_path, is_normalized_image=False):

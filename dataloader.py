@@ -65,19 +65,19 @@ def convert_to_ndc_rays(o_rays, d_rays, focal, width, height, near=1.0):
 
 class SyntheticDataset(Dataset):
 
-    def __init__(self, base_dir, tvt, num_rays, height, width): 
-        self._setup(base_dir, tvt, num_rays, height, width)
+    def __init__(self, base_dir, tvt, num_rays): 
+        self._setup(base_dir, tvt, num_rays)
         file = open(f'{self.base_dir}transforms_{tvt}.json')
         self.data = json.load(file)
+        self.frames = self.data['frames']
         self.camera_angle = self.data['camera_angle_x']
         self.focal = 0.5 * self.W / np.tan(0.5 * self.camera_angle)
-        self.frames = self.data['frames']
         self._preprocess()
         file.close()
 
-    def _setup(self, base_dir, tvt, num_rays, height, width): 
-        self.H = height
-        self.W = width
+    def _setup(self, base_dir, tvt, num_rays): 
+        self.H = 800
+        self.W = 800
         self.tvt = tvt
         self.num_rays = num_rays
         self.base_dir = base_dir
@@ -92,7 +92,7 @@ class SyntheticDataset(Dataset):
                                                                    self.focal, self.W, self.H,
                                                                    near=1.0)
             del f['rotation']; f.pop('rotation', None)
-            del f['transform_matrix']; f.pop('rotation', None)
+            del f['transform_matrix']; f.pop('transform_matrix', None)
 
     def __len__(self):
         return len(self.frames)
@@ -104,10 +104,14 @@ class SyntheticDataset(Dataset):
         rgba = frame['image'][xs,ys,:]
         origin = frame['o_ndc_rays'][xs, ys, :]
         direction = frame['d_ndc_rays'][xs, ys, :]
-        return {'origin': origin, 'direc': direction, 'rgba': rgba, 'xs': xs, 'ys': ys}
+        if self.tvt == 'train':
+            return {'origin': origin, 'direc': direction, 'rgba': rgba, 'xs': xs, 'ys': ys}
+        else: 
+            return {'origin': origin, 'direc': direction, 'rgba': rgba, 'xs': xs, 'ys': ys, 
+                    'all_origin': frame['o_ndc_rays'], 'all_direc': frame['d_ndc_rays']}
 
-def getSyntheticDataloader(base_dir, tvt, num_rays, width, height, num_workers=8, shuffle=True): 
-    dataset = SyntheticDataset(base_dir, tvt, num_rays, width, height)
+def getSyntheticDataloader(base_dir, tvt, num_rays, num_workers=8, shuffle=True): 
+    dataset = SyntheticDataset(base_dir, tvt, num_rays)
     return DataLoader(dataset=dataset, batch_size=1, shuffle=shuffle, num_workers=num_workers)
 
 class PhotoDataset(Dataset):

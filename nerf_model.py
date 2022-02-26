@@ -79,16 +79,18 @@ class NeRFNetwork(LightningModule):
 
         # sort ts to be sequential (in order to calculate deltas correctly) and sort density and rgb to align.
         all_ts = torch.cat([coarse_ts, fine_ts], dim=1)
-        all_ts, idxs = torch.sort(all_ts, dim=1)        
+        all_ts, idxs = torch.sort(all_ts, dim=1)
         all_density = torch.gather(torch.cat([coarse_density, fine_density], dim=1), 1, idxs)
         idxs = torch.broadcast_to(idxs, list(all_density.shape[:-1]) + [3])
         all_rgb = torch.gather(torch.cat([coarse_rgb, fine_rgb], dim=1), 1, idxs)
+        all_samples = torch.gather(torch.cat([coarse_samples, fine_samples], dim=1), 1, idxs)
 
         # calculate ray color.
         all_deltas = nerf_helpers.generate_deltas(all_ts)
         all_weights = nerf_helpers.calculate_unnormalized_weights(all_density, all_deltas)
         pred_rgbs = nerf_helpers.estimate_ray_color(all_weights, all_rgb)
-        return {'pred_rgbs': pred_rgbs, 'all_rgb': all_rgb, 'all_density': all_density, 'all_ts': all_ts}
+        return {'pred_rgbs': pred_rgbs, 'all_rgb': all_rgb, 'all_density': all_density, 'all_ts': all_ts, 
+                'all_samples': all_samples, 'all_deltas': all_deltas}
 
     def configure_optimizers(self):
         optimizer = torch.optim.Adam(self.parameters(), lr=5e-4)
@@ -107,13 +109,37 @@ class NeRFNetwork(LightningModule):
 
     def validation_step(self, val_batch, batch_idx):
         nerf_helpers.fix_batchify(val_batch)
+        # Regular Validation Step
+
+        # inputs
         o_rays = val_batch['origin'] 
         d_rays = val_batch['direc']
         rgba =  val_batch['rgba']
+        
+        # forward pass
         pred_dict = self.forward(o_rays, d_rays)
-        pred_rgb = pred_dict['pred_rgbs']
-        loss = F.mse_loss(pred_rgb, rgba)
+        pred_rgbs = pred_dict['pred_rgbs']
+        
+        # loss
+        loss = F.mse_loss(pred_rgbs, rgba)
         self.log('val_loss', loss)
+
+        # TODO: Render image. For now lets just see what colors the rays are.
+        # feel like this will OOM at some point...
+        all_o_rays = val_batch['all_origin']
+        all_d_rays = val_batch['all_direc']
+        H, W, C = all_o_rays.shape
+        all_o_rays = all_o_rays.view((H*W, C))
+        all_d_rays = all_d_rays.view((H*W, C))
+        im = []
+        for i in range(0, H*W, 4096): 
+            recon_preds = self.forward(all_o_rays[i:min(H*W,i+4096),:], all_d_rays[i:min(H*W,i+4096),:])
+            im.append(recon_preds['pred_rgbs'])
+
+        im = torch.cat(im, dim=0).view((H,W, C))
+        im = torch_to_numpy(im, is_normalized_image=True)
+        # Image.fromarray(im.astype(np.uint8)).save('./val.png')
+        self.logger.log_image(key='recon', images=[im])
         return loss
 
 
