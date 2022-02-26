@@ -1,8 +1,8 @@
 """Script to train NeRF models.
 
 Usage Examples:
-    python train_nerf.py simple -n test -s 10: train simple/toy nerf with experiment name test for 10 steps.
-    python train_nerf full -n test --gpu: 
+    python train_nerf.py -n test -s 10 simple: train simple/toy nerf with experiment name test for 10 steps.
+    python train_nerf.py -n test --gpu full: trains full nerf model on a gpu with experiment name test.
 
 """
 from pytorch_lightning import Trainer
@@ -48,7 +48,7 @@ if __name__ == '__main__':
         help='The image path to use as data')
 
     full_parser.add_argument('-d', '--direction_encoding', type=int, default=10, help='direction encoding length')
-    full_parser.add_argument('-b', '--base_dir', type=str, default='./data/toy_data/', help='directory for dataset')
+    full_parser.add_argument('-b', '--base_dir', type=str, default='/home/nakuram/CSEP573-NeRF/data/nerf_synthetic/lego/', help='directory for dataset')
     full_parser.add_argument('-r', '--rays', type=int, default=4096, help='number of rays per batch')
     full_parser.add_argument('-c', '--coarse', type=int, default=64, help='number of coarse samples')
     full_parser.add_argument('-f', '--fine', type=int, default=128, help='number of fine samples')

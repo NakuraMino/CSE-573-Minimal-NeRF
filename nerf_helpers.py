@@ -1,6 +1,8 @@
 import torch
 import numpy as np
 
+device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
 def fix_batchify(batch): 
     """Squeezes torch Tensors so first dimension is the true batch dimension.
 
@@ -25,9 +27,9 @@ def generate_coarse_samples(o_rays: torch.Tensor, d_rays: torch.Tensor, num_samp
     N, _ = o_rays.shape
     o_rays = o_rays.unsqueeze(1)
     d_rays = d_rays.unsqueeze(1)
-    ts = torch.broadcast_to(torch.linspace(0,(num_samples-1)/num_samples, num_samples)[None, ...], 
+    ts = torch.broadcast_to(torch.linspace(0,(num_samples-1)/num_samples, num_samples, device=device)[None, ...], 
                             (N, num_samples))
-    rand = torch.rand(ts.shape)
+    rand = torch.rand(ts.shape, device=device)
     ts = ts + (rand / num_samples)
     ts = ts.unsqueeze(-1)
     samples = d_rays * ts + o_rays
@@ -107,8 +109,8 @@ def inverse_transform_sampling(o_rays: torch.Tensor, d_rays: torch.Tensor, weigh
     
     cdf = torch.cumsum(weights, axis=1)  # [N x C]
     cdf = cdf / cdf[:,-1, None]
-    eps = torch.rand((N,1)) / num_samples  # low variance sampling
-    samples = torch.linspace(0, (num_samples - 1) / num_samples, num_samples)
+    eps = torch.rand((N,1), device=device) / num_samples  # low variance sampling
+    samples = torch.linspace(0, (num_samples - 1) / num_samples, num_samples, device)
     samples = torch.broadcast_to(samples, (N, num_samples))
     samples = samples + eps
 
@@ -117,6 +119,6 @@ def inverse_transform_sampling(o_rays: torch.Tensor, d_rays: torch.Tensor, weigh
     idxs[idxs >= C] = C - 1
     bins = torch.gather(ts, 1, idxs)
     
-    fine_ts = bins + torch.rand((N, num_samples, 1)) / num_samples
+    fine_ts = bins + torch.rand((N, num_samples, 1), device=device) / num_samples
     fine_samples = o_rays + fine_ts * d_rays
     return fine_samples, fine_ts
