@@ -152,7 +152,7 @@ class NeRFNetwork(LightningModule):
             im = torch.cat(im, dim=0).view((H,W, C))
             im = torch_to_numpy(im, is_normalized_image=True)
             # Image.fromarray(im.astype(np.uint8)).save('./val.png')
-            self.logger.log_image(key='recon', images=[im], caption=[str(self.im_idx)])
+            self.logger.log_image(key='recon', images=[im], caption=[f'val/{self.im_idx}.png'])
             del im
         return loss
 
