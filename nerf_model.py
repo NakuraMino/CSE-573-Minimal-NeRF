@@ -157,6 +157,109 @@ class NeRFNetwork(LightningModule):
         return loss
 
 
+class SingleNeRF(LightningModule):
+    """A Single NeRF Network.
+
+    Pytorch-Lightning Wrapper to train a single NeRF Model. Mostly for debugging purposes.
+    """
+    def __init__(self, position_dim=10, direction_dim=4, num_samples=128):
+        """NeRF Constructor.
+
+        Args:
+            position_dim: the size of the position encoding. Resulting size will be 
+                input_size*2*position_dim.
+            direction_dim: the size of the direction encoding. Resulting size will be 
+                input_size*2*direction_dim.
+            coarse_samples: number of samples for the coarse network.
+            fine_samples: number of additional samples for the fine network. (i.e. fine network 
+                gets coarse+fine samples)
+        """
+        super(SingleNeRF, self).__init__()
+        self.position_dim = position_dim
+        self.direction_dim = direction_dim
+        self.num_samples = num_samples
+        self.network = NeRFModel(position_dim, direction_dim)
+
+    def forward(self, o_rays, d_rays):
+        """Single forward pass on both coarse and fine network.
+
+        Args:
+            o_rays: [N x 3] coordinates of the ray origin.
+            d_rays: [N x 3] directions of the ray.
+        Returns:
+            dictionary with keys:
+                'pred_rgbs': [N x 3] tensor of predicted rgb value of each ray.
+                'all_rgb': [N x coarse*2+fine_samples x 3] rgb predictions at each location.
+                'all_density': [N x coarse*2+fine_samples x 1] density predictions.
+                'all_ts': [N x coarse*2+fine_samples x 1] time values along a ray direction.
+        """
+        # calculating coarse
+        samples, ts = nerf_helpers.generate_coarse_samples(o_rays, d_rays, self.num_samples)
+        density, rgb =self.network(samples, d_rays)
+        deltas = nerf_helpers.generate_deltas(ts)
+
+        # calculate ray color.
+        weights = nerf_helpers.calculate_unnormalized_weights(density, deltas)
+        pred_rgbs = nerf_helpers.estimate_ray_color(weights, rgb)
+        return {'pred_rgbs': pred_rgbs, 'density': density, 'ts': ts, 
+                'samples': samples, 'deltas': deltas}
+
+    def configure_optimizers(self):
+        optimizer = torch.optim.Adam(self.parameters(), lr=5e-4)
+        return optimizer
+
+    def training_step(self, train_batch, batch_idx):
+        nerf_helpers.fix_batchify(train_batch)
+        # inputs
+        o_rays = train_batch['origin'] 
+        d_rays = train_batch['direc']
+        rgba =  train_batch['rgba']
+        
+        # forward pass
+        pred_dict = self.forward(o_rays, d_rays)
+        pred_rgb = pred_dict['pred_rgbs']
+        
+        # loss
+        N, _ = pred_rgb.shape
+        loss = F.mse_loss(pred_rgb, rgba)
+        self.log('train_loss', loss, batch_size=N)
+        return loss
+
+    def validation_step(self, val_batch, batch_idx):
+        nerf_helpers.fix_batchify(val_batch)
+        # Regular Validation Step
+
+        # inputs
+        o_rays = val_batch['origin'] 
+        d_rays = val_batch['direc']
+        rgba =  val_batch['rgba']
+        
+        # forward pass
+        pred_dict = self.forward(o_rays, d_rays)
+        pred_rgbs = pred_dict['pred_rgbs']
+        
+        # loss
+        N, _ = pred_rgbs.shape
+        loss = F.mse_loss(pred_rgbs, rgba)
+        self.log('val_loss', loss, batch_size=N)
+
+        if False:
+            all_o_rays = val_batch['all_origin']
+            all_d_rays = val_batch['all_direc']
+            H, W, C = all_o_rays.shape
+            all_o_rays = all_o_rays.view((H*W, C))
+            all_d_rays = all_d_rays.view((H*W, C))
+            im = []
+            for i in range(0, H*W, N): 
+                recon_preds = self.forward(all_o_rays[i:min(H*W,i+N),:], all_d_rays[i:min(H*W,i+N),:])
+                im.append(recon_preds['pred_rgbs'])
+            im = torch.cat(im, dim=0).view((H,W, C))
+            im = torch_to_numpy(im, is_normalized_image=True)
+            self.logger.log_image(key='recon', images=[im], caption=[f'val/{self.im_idx}.png'])
+            del im
+        return loss
+
+
 class NeRFModel(nn.Module):
     """A single NeRF model.
 

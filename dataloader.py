@@ -84,13 +84,7 @@ class SyntheticDataset(Dataset):
 
     def _preprocess(self):
         for f in self.frames:
-            f['file_path'] = Path(self.base_dir, f"{f['file_path']}.png")            
-            # f['cam_to_world'] = torch.Tensor(f['transform_matrix']) 
-            # f['image'] = (torch.Tensor(imageio.imread(im_path, pilmode="RGB")) / 255.0).float()  # [HxWx3]
-            # f['o_rays'], f['d_rays'] = get_rays(self.H, self.W, self.focal, f['cam_to_world'])  # [HxWx3]
-            # f['o_ndc_rays'], f['d_ndc_rays'] = convert_to_ndc_rays(f['o_rays'], f['d_rays'],   
-            #                                                        self.focal, self.W, self.H,
-            #                                                        near=1.0)
+            f['file_path'] = Path(self.base_dir, f"{f['file_path']}.png")
             del f['rotation']; f.pop('rotation', None)
 
     def __len__(self):
