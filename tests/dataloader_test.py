@@ -14,8 +14,8 @@ class DataloaderTest(unittest.TestCase):
         self.pds = dataloader.PhotoDataset(im_path)
         self.pdl = dataloader.getPhotoDataloader(im_path, batch_size=32, num_workers=1, shuffle=True)
         base_dir = './test_data/'
-        self.sds = dataloader.SyntheticDataset(base_dir, 'train', 1, 50, 50)
-        self.sdl = dataloader.getSyntheticDataloader(base_dir, 'train', 4096, 50, 50, num_workers=1, shuffle=True)
+        self.sds = dataloader.SyntheticDataset(base_dir, 'train', 1)
+        self.sdl = dataloader.getSyntheticDataloader(base_dir, 'train', 4096, num_workers=1, shuffle=True)
 
     def test_photo_get_0th_idx(self):
         coords, rgb = self.pds[0]
@@ -37,8 +37,8 @@ class DataloaderTest(unittest.TestCase):
         self.assertEqual(rgb.shape, (32, 3))
 
     def test_synthetic_focal_length(self): 
-        # 0.5 * W / tan(0.5 * cam_angle_x) = 0.5 * 50 / tan(0.5 * 0.6) = 80.81820359
-        self.assertAlmostEqual(self.sds.focal, 80.81820359)
+        # 0.5 * W / tan(0.5 * cam_angle_x) = 0.5 * 800 / tan(0.5 * 0.6) = 1293.09128
+        self.assertAlmostEqual(self.sds.focal, 1293.091257506331)
 
     def test_get_batch(self):
         batch = next(iter(self.sdl))
@@ -46,9 +46,6 @@ class DataloaderTest(unittest.TestCase):
         self.assertTrue('direc' in batch)
         self.assertTrue('rgba' in batch)
         
-
-
-
     # I was going to test my rays but ummm, its kind of hard
     # def test_synthetic_get_ray(self):
     #     torch.manual_seed(0)

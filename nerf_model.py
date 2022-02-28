@@ -243,20 +243,19 @@ class SingleNeRF(LightningModule):
         loss = F.mse_loss(pred_rgbs, rgba)
         self.log('val_loss', loss, batch_size=N)
 
-        if False:
-            all_o_rays = val_batch['all_origin']
-            all_d_rays = val_batch['all_direc']
-            H, W, C = all_o_rays.shape
-            all_o_rays = all_o_rays.view((H*W, C))
-            all_d_rays = all_d_rays.view((H*W, C))
-            im = []
-            for i in range(0, H*W, N): 
-                recon_preds = self.forward(all_o_rays[i:min(H*W,i+N),:], all_d_rays[i:min(H*W,i+N),:])
-                im.append(recon_preds['pred_rgbs'])
-            im = torch.cat(im, dim=0).view((H,W, C))
-            im = torch_to_numpy(im, is_normalized_image=True)
-            self.logger.log_image(key='recon', images=[im], caption=[f'val/{self.im_idx}.png'])
-            del im
+        all_o_rays = val_batch['all_origin']
+        all_d_rays = val_batch['all_direc']
+        H, W, C = all_o_rays.shape
+        all_o_rays = all_o_rays.view((H*W, C))
+        all_d_rays = all_d_rays.view((H*W, C))
+        im = []
+        for i in range(0, H*W, N): 
+            recon_preds = self.forward(all_o_rays[i:min(H*W,i+N),:], all_d_rays[i:min(H*W,i+N),:])
+            im.append(recon_preds['pred_rgbs'])
+        im = torch.cat(im, dim=0).view((H,W, C))
+        im = torch_to_numpy(im, is_normalized_image=True)
+        self.logger.log_image(key='recon', images=[im], caption=[f'val/{self.im_idx}.png'])
+        del im
         return loss
 
 

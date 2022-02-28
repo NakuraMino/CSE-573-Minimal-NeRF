@@ -2,7 +2,7 @@
     "camera_angle_x": 0.6,
     "frames": [
         {
-            "file_path": "./train/test",
+            "file_path": "./train/r_0",
             "rotation": 0.012566370614359171,
             "transform_matrix": [
                 [1.0, 0.0, 0.0, 0.5],

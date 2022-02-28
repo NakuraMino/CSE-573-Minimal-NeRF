@@ -14,24 +14,25 @@ class NerfModelTest(unittest.TestCase):
     def setUp(self):
         # dataloader to test fwd fn
         base_dir = './test_data/'
-        self.dl = dataloader.getSyntheticDataloader(base_dir, 'train', 1, 50, 50, num_workers=1, shuffle=True)
+        self.dl = dataloader.getSyntheticDataloader(base_dir, 'train', 1, num_workers=1, shuffle=True)
         self.batch = next(iter(self.dl))
         # random tensors to use for testing
         self.vector = torch.Tensor([[1.0, 1.0, 1.0]])
         self.complex_vector = torch.Tensor([[0.0, 0.0, 0.0], [1.0, 1.0, 1.0]])
         self.coord = torch.Tensor([[1.0, 0.0]])
-
+        self.samples = torch.rand((4, 4, 3))
+        self.direc = torch.rand((4, 3))
         # NeRF models.
-        self.single_model = nerf_model.NeRFModel(position_dim=10, density_dim=4)
+        self.single_model = nerf_model.NeRFModel(position_dim=10, direction_dim=4)
         self.im_model = nerf_model.ImageNeRFModel(position_dim=-1)
-        self.network = nerf_model.NeRFNetwork(position_dim=10, density_dim=4, coarse_samples=64, fine_samples=128)
+        self.network = nerf_model.NeRFNetwork(position_dim=10, direction_dim=4, coarse_samples=64, fine_samples=128)
 
     """""""""
     Testing full NeRF model
     """""""""
     def test_nerf_network_training_step(self):
         loss = self.network.training_step(self.batch, 0)
-        self.assertGreater(loss, 0)
+        self.assertGreaterEqual(loss, 0)
 
     """""""""
     Testing positional encoding function
@@ -65,15 +66,10 @@ class NerfModelTest(unittest.TestCase):
     Testing single NeRF Model
     """""""""
 
-    def test_single_forward_prop_shape(self): 
-        density, rgb = self.single_model(self.vector, self.vector)
-        self.assertEqual(density.shape, (1, 1))
-        self.assertEqual(rgb.shape, (1, 3))
-
     def test_single_complex_forward_prop_shape(self): 
-        density, rgb = self.single_model(self.complex_vector, self.complex_vector)
-        self.assertEqual(density.shape, (2, 1))
-        self.assertEqual(rgb.shape, (2, 3))
+        density, rgb = self.single_model(self.samples, self.direc)
+        self.assertEqual(density.shape, (4, 4, 1))
+        self.assertEqual(rgb.shape, (4,4, 3))
 
     """""""""
     Testing image NeRF Model

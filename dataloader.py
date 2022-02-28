@@ -36,9 +36,9 @@ def get_rays(H, W, focal, c2w):
 def convert_to_ndc_rays(o_rays, d_rays, focal, width, height, near=1.0): 
     """
     Args:
-        d_rays: [N x 4] representing ray direction 
-        o_rays: [N x 4] representing ray origin 
-        angle: camera_angle_x
+        o_rays: [H x W x 3] representing ray origin.
+        d_rays: [H x W x 3] representing ray direction.
+        focal: focal length.
         width: the maximum width 
         height: the maximum height
         near: the near depth bound (i.e. 1)
@@ -53,14 +53,13 @@ def convert_to_ndc_rays(o_rays, d_rays, focal, width, height, near=1.0):
     ox_new =  -1.0 * focal / (width / 2) * (ox / oz)
     oy_new =  -1.0 * focal / (height / 2) * (oy / oz)
     oz_new = 1.0 + (2 * near) / oz
-    
     dx_new =  -1.0 * focal / (width / 2) * ((dx / dz) - (ox / oz))
     dy_new =  -1.0 * focal / (height / 2) * ((dy / dz) - (oy / oz))
     dz_new = (- 2 * near) / oz
     
     o_ndc_rays = torch.stack([ox_new, oy_new, oz_new], axis=-1)
     d_ndc_rays = torch.stack([dx_new, dy_new, dz_new], axis=-1)
-    
+    d_ndc_rays = d_ndc_rays / torch.linalg.norm(d_ndc_rays, dim=-1,keepdim=True)
     return o_ndc_rays, d_ndc_rays
 
 class SyntheticDataset(Dataset):
@@ -103,12 +102,16 @@ class SyntheticDataset(Dataset):
         origin = o_ndc_rays[xs, ys, :]
         direction = d_ndc_rays[xs, ys, :]
 
-        del image, cam_to_world, o_rays, d_rays
+        # del image, cam_to_world, o_rays, d_rays
         if self.tvt == 'train':
             return {'origin': origin, 'direc': direction, 'rgba': rgb, 'xs': xs, 'ys': ys}
         else: 
             return {'origin': origin, 'direc': direction, 'rgba': rgb, 'xs': xs, 'ys': ys, 
-                    'all_origin': o_ndc_rays, 'all_direc': d_ndc_rays}
+                    'all_origin': o_ndc_rays, 'all_direc': d_ndc_rays, 'o_rays': o_rays,
+                    'd_rays': d_rays}        
+            # return {'origin': origin, 'direc': direction, 'rgba': rgb, 'xs': xs, 'ys': ys, 
+            #         'all_origin': o_ndc_rays, 'all_direc': d_ndc_rays}
+        
 
 def getSyntheticDataloader(base_dir, tvt, num_rays, num_workers=8, shuffle=True): 
     dataset = SyntheticDataset(base_dir, tvt, num_rays)
