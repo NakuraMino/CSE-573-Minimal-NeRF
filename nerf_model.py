@@ -79,6 +79,7 @@ class NeRFNetwork(LightningModule):
         # calculating coarse
         coarse_samples, coarse_ts = nerf_helpers.generate_coarse_samples(o_rays, d_rays, self.coarse_samples, self.near, self.far)
         coarse_density, coarse_rgb =self.coarse_network(coarse_samples, d_rays)
+        self.log('coarse_density', torch.linalg.norm(coarse_density))
         coarse_deltas = nerf_helpers.generate_deltas(coarse_ts)
 
         weights = nerf_helpers.calculate_unnormalized_weights(coarse_density, coarse_deltas)
@@ -88,7 +89,7 @@ class NeRFNetwork(LightningModule):
         fine_samples = torch.cat([fine_samples, coarse_samples], axis=1)
         fine_ts = torch.cat([fine_ts, coarse_ts], axis=1)
         fine_density, fine_rgb = self.fine_network(fine_samples, d_rays)
-
+        self.log('fine_density', torch.linalg.norm(fine_density))
         # sort ts to be sequential (in order to calculate deltas correctly) and sort density and rgb to align.
         all_ts = torch.cat([coarse_ts, fine_ts], dim=1)
         all_ts, idxs = torch.sort(all_ts, dim=1)

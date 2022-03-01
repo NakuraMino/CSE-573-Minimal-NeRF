@@ -22,8 +22,8 @@ def train_full_nerf(root_dir, base_dir, logger_name, steps, pos_enc, direc_enc, 
     wandb_logger.log_hyperparams(args)
     trainer = Trainer(gpus=int(use_gpu), default_root_dir=root_dir, max_steps=steps,
                       logger=wandb_logger, check_val_every_n_epoch=10, track_grad_norm=2)
-    train_dl = dataloader.getSyntheticDataloader(base_dir, 'train', num_rays, num_workers=8, shuffle=True)
-    val_dl = dataloader.getSyntheticDataloader(base_dir, 'val', num_rays, num_workers=8, shuffle=False)
+    train_dl = dataloader.getSyntheticDataloader(base_dir, 'train', num_rays, num_workers=2, shuffle=True)
+    val_dl = dataloader.getSyntheticDataloader(base_dir, 'val', num_rays, num_workers=2, shuffle=False)
     model = nerf_model.NeRFNetwork(position_dim=pos_enc, direction_dim=direc_enc, 
                                    coarse_samples=coarse_samples, fine_samples=fine_samples,
                                    near=near, far=far)
