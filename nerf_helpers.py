@@ -1,5 +1,6 @@
 import torch
 import numpy as np
+from nerf_to_recon import torch_to_numpy
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
@@ -133,3 +134,15 @@ def inverse_transform_sampling(o_rays: torch.Tensor, d_rays: torch.Tensor, weigh
     fine_samples = o_rays + fine_ts * d_rays
     del cdf, idxs, bins, samples, eps
     return fine_samples, fine_ts
+
+def view_reconstruction(model, all_o_rays, all_d_rays, N=4096):
+    H, W, C = all_o_rays.shape
+    all_o_rays = all_o_rays.view((H*W, C))
+    all_d_rays = all_d_rays.view((H*W, C))
+    im = []
+    for i in range(0, H*W, N): 
+        recon_preds = model.forward(all_o_rays[i:min(H*W,i+N),:], all_d_rays[i:min(H*W,i+N),:])
+        im.append(recon_preds['pred_rgbs'])
+    im = torch.cat(im, dim=0).view((H,W, C))
+    im = torch_to_numpy(im, is_normalized_image=True)
+    return im

@@ -79,7 +79,8 @@ class NeRFNetwork(LightningModule):
         # calculating coarse
         coarse_samples, coarse_ts = nerf_helpers.generate_coarse_samples(o_rays, d_rays, self.coarse_samples, self.near, self.far)
         coarse_density, coarse_rgb =self.coarse_network(coarse_samples, d_rays)
-        self.log('coarse_density', torch.linalg.norm(coarse_density))
+        self.log('coarse_density_norms', torch.linalg.norm(coarse_density))
+        self.log('coarse_density_non_zeros', (coarse_density != 0).sum())
         coarse_deltas = nerf_helpers.generate_deltas(coarse_ts)
 
         weights = nerf_helpers.calculate_unnormalized_weights(coarse_density, coarse_deltas)
@@ -90,6 +91,8 @@ class NeRFNetwork(LightningModule):
         fine_ts = torch.cat([fine_ts, coarse_ts], axis=1)
         fine_density, fine_rgb = self.fine_network(fine_samples, d_rays)
         self.log('fine_density', torch.linalg.norm(fine_density))
+        self.log('fine_density_non_zeros', (fine_density != 0).sum())
+
         # sort ts to be sequential (in order to calculate deltas correctly) and sort density and rgb to align.
         all_ts = torch.cat([coarse_ts, fine_ts], dim=1)
         all_ts, idxs = torch.sort(all_ts, dim=1)
@@ -123,7 +126,6 @@ class NeRFNetwork(LightningModule):
         # loss
         N, _ = pred_rgb.shape
         loss = F.mse_loss(pred_rgb, rgb)
-        end = timer()
         self.log('train_loss', loss, batch_size=N)
         self.log('train iteration speed', timer() - self.timer, batch_size=N)
         self.timer = timer()
@@ -153,16 +155,7 @@ class NeRFNetwork(LightningModule):
         if batch_idx == self.im_idx:
             all_o_rays = val_batch['all_origin']
             all_d_rays = val_batch['all_direc']
-            H, W, C = all_o_rays.shape
-            all_o_rays = all_o_rays.view((H*W, C))
-            all_d_rays = all_d_rays.view((H*W, C))
-            im = []
-            for i in range(0, H*W, N): 
-                recon_preds = self.forward(all_o_rays[i:min(H*W,i+N),:], all_d_rays[i:min(H*W,i+N),:])
-                im.append(recon_preds['pred_rgbs'])
-
-            im = torch.cat(im, dim=0).view((H,W, C))
-            im = torch_to_numpy(im, is_normalized_image=True)
+            im = nerf_helpers.view_reconstruction(all_o_rays, all_d_rays, N=N)
             self.logger.log_image(key='recon', images=[im], caption=[f'val/{self.im_idx}.png'])
             del im
         return loss
@@ -261,15 +254,7 @@ class SingleNeRF(LightningModule):
 
         all_o_rays = val_batch['all_origin']
         all_d_rays = val_batch['all_direc']
-        H, W, C = all_o_rays.shape
-        all_o_rays = all_o_rays.view((H*W, C))
-        all_d_rays = all_d_rays.view((H*W, C))
-        im = []
-        for i in range(0, H*W, N): 
-            recon_preds = self.forward(all_o_rays[i:min(H*W,i+N),:], all_d_rays[i:min(H*W,i+N),:])
-            im.append(recon_preds['pred_rgbs'])
-        im = torch.cat(im, dim=0).view((H,W, C))
-        im = torch_to_numpy(im, is_normalized_image=True)
+        im = nerf_helpers.view_reconstruction(all_o_rays, all_d_rays, N=N)
         self.logger.log_image(key='recon', images=[im], caption=[f'val/0.png'])
         del im
         return loss
