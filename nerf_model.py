@@ -296,6 +296,7 @@ class NeRFModel(nn.Module):
         self.position_dim = position_dim
         self.direction_dim = direction_dim
         # first MLP is a simple multi-layer perceptron 
+        self.idx = 0
         self.mlp = nn.Sequential(
             nn.Linear(self.position_dim*2*3, 256),
             nn.ReLU(),
@@ -338,6 +339,7 @@ class NeRFModel(nn.Module):
             density: [N x samples x 1] density predictions.
             rgb: [N x samples x 3] color/rgb predictions.
         """
+        self._change_density_activation()
         # direction needs to be broadcasted since it hasn't been sampled
         direc = torch.broadcast_to(direc[:, None, :], samples.shape)
         # positional encodings
@@ -353,6 +355,12 @@ class NeRFModel(nn.Module):
         dim_features = torch.cat((x_features, pos_enc_direc), dim=-1)
         rgb = self.rgb_fn(dim_features)
         return density, rgb
+
+    def _change_density_activation(self): 
+        self.idx += 1
+        if self.idx == 1000:
+            use_relu = list(self.density_fn.children())[:-1] + [nn.ReLU()]
+            self.density_fn = nn.Sequential(*use_relu)
 
 
 class ImageNeRFModel(LightningModule):
