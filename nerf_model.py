@@ -61,6 +61,7 @@ class NeRFNetwork(LightningModule):
         self.fine_network = NeRFModel(position_dim, direction_dim)
         self.im_idx = 0
         self.max_idx = 1
+        self.timer = timer()
 
     def forward(self, o_rays, d_rays):
         """Single forward pass on both coarse and fine network.
@@ -108,7 +109,6 @@ class NeRFNetwork(LightningModule):
         return optimizer
 
     def training_step(self, train_batch, batch_idx):
-        start = timer()
         nerf_helpers.fix_batchify(train_batch)
         # inputs
         o_rays = train_batch['origin'] 
@@ -124,7 +124,8 @@ class NeRFNetwork(LightningModule):
         loss = F.mse_loss(pred_rgb, rgb)
         end = timer()
         self.log('train_loss', loss, batch_size=N)
-        self.log('train iteration speed', end - start, batch_size=N)
+        self.log('train iteration speed', timer() - self.timer, batch_size=N)
+        self.timer = timer()
         return loss
 
     def validation_step(self, val_batch, batch_idx):
@@ -314,12 +315,12 @@ class NeRFModel(nn.Module):
             nn.Linear(256, 256),
             nn.ReLU(),
             nn.Linear(256, 256),
-            nn.ReLU(),
+            # nn.ReLU(),
         )
 
         self.density_fn = nn.Sequential(
             nn.Linear(256, 1),
-            Square()  # rectified to ensure nonnegative density
+            nn.ReLU() # rectified to ensure nonnegative density
         )
 
         self.rgb_fn = nn.Sequential(
