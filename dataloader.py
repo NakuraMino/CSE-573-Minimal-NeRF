@@ -1,6 +1,6 @@
 """Dataloaders for a photo and synthetic dataset.
 """
-import os 
+
 import torch 
 from torch.utils.data import Dataset, DataLoader
 import numpy as np
@@ -8,7 +8,6 @@ from PIL import Image
 import imageio
 import json
 from pathlib import Path
-
 
 def image_to_tensor(image):
     if image.ndim == 4: # NHWC
@@ -18,10 +17,18 @@ def image_to_tensor(image):
     return tensor
 
 def sample_random_coordinates(N, height, width): 
-    """Returns [Nx4] randomly sampled coordinates in camera frame
+    """Two [N,] torch tensors representing random coordinates.
+
+    Args:
+        N: int representing number of coordinates to sample
+        height: the maximum height value (exclusive)
+        width: maximum width value (exclusive)
+    Returns:
+        xs: [N,] torch tensor of random ints [0,width)
+        ys: [N,] torch tensor of random ints [0,height)
     """
-    xs = torch.randint(0, height, size=(N,))
-    ys = torch.randint(0, width, size=(N,))
+    xs = torch.randint(0, width, size=(N,))
+    ys = torch.randint(0, height, size=(N,))
     return xs, ys
 
 def get_rays(H, W, focal, c2w):
@@ -64,10 +71,18 @@ def convert_to_ndc_rays(o_rays, d_rays, focal, width, height, near=1.0):
     return o_ndc_rays, d_ndc_rays
 
 class SyntheticDataset(Dataset):
+    """Dataset for Synthetic images."""
 
-    def __init__(self, base_dir, tvt, num_rays): 
+    def __init__(self, base_dir, tvt, num_rays):
+        """Constructor.
+
+        Args:
+            base_dir: str or path to dataset directory.
+            tvt: str of either "train", "val", or "test".
+            num_rays: number of rays to sample per batch / image.
+        """ 
         self._setup(base_dir, tvt, num_rays)
-        file = open(f'{self.base_dir}transforms_{tvt}.json')
+        file = open(Path(self.base_dir, f'transforms_{tvt}.json'))
         self.data = json.load(file)
         self.frames = self.data['frames']
         self.camera_angle = self.data['camera_angle_x']
@@ -76,6 +91,7 @@ class SyntheticDataset(Dataset):
         file.close()
 
     def _setup(self, base_dir, tvt, num_rays): 
+        # we know synthetic images are 800x800.
         self.H = 800
         self.W = 800
         self.tvt = tvt
@@ -83,6 +99,7 @@ class SyntheticDataset(Dataset):
         self.base_dir = base_dir
 
     def _preprocess(self):
+        """Change json dicts to remove 'rotation' and make path into object."""
         for f in self.frames:
             f['file_path'] = Path(self.base_dir, f"{f['file_path']}.png")
             del f['rotation']; f.pop('rotation', None)
@@ -101,11 +118,11 @@ class SyntheticDataset(Dataset):
         origin = o_rays[xs, ys, :]
         direction = d_rays[xs, ys, :]
 
-        # del image, cam_to_world, o_rays, d_rays
+        del image, cam_to_world
         if self.tvt == 'train':
-            return {'origin': origin, 'direc': direction, 'rgba': rgb, 'xs': xs, 'ys': ys}
+            return {'origin': origin, 'direc': direction, 'rgb': rgb, 'xs': xs, 'ys': ys}
         else: 
-            return {'origin': origin, 'direc': direction, 'rgba': rgb, 'xs': xs, 'ys': ys, 
+            return {'origin': origin, 'direc': direction, 'rgb': rgb, 'xs': xs, 'ys': ys,
                     'all_origin': o_rays, 'all_direc': d_rays}
 
 def getSyntheticDataloader(base_dir, tvt, num_rays, num_workers=8, shuffle=True): 

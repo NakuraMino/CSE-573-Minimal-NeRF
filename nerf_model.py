@@ -25,6 +25,12 @@ def positional_encoding(x, dim=10):
     positional_encoding = torch.cat(positional_encoding, dim=-1)
     return positional_encoding
 
+
+class Square(nn.Module):
+    def forward(self, x):
+        return torch.square(x)
+
+
 class NeRFNetwork(LightningModule):
     """A full NeRF Network.
 
@@ -107,7 +113,7 @@ class NeRFNetwork(LightningModule):
         # inputs
         o_rays = train_batch['origin'] 
         d_rays = train_batch['direc']
-        rgba =  train_batch['rgba']
+        rgb =  train_batch['rgb']
         
         # forward pass
         pred_dict = self.forward(o_rays, d_rays)
@@ -115,7 +121,7 @@ class NeRFNetwork(LightningModule):
         
         # loss
         N, _ = pred_rgb.shape
-        loss = F.mse_loss(pred_rgb, rgba)
+        loss = F.mse_loss(pred_rgb, rgb)
         end = timer()
         self.log('train_loss', loss, batch_size=N)
         self.log('train iteration speed', end - start, batch_size=N)
@@ -131,7 +137,7 @@ class NeRFNetwork(LightningModule):
         # inputs
         o_rays = val_batch['origin'] 
         d_rays = val_batch['direc']
-        rgba =  val_batch['rgba']
+        rgb =  val_batch['rgb']
         
         # forward pass
         pred_dict = self.forward(o_rays, d_rays)
@@ -139,11 +145,9 @@ class NeRFNetwork(LightningModule):
         
         # loss
         N, _ = pred_rgbs.shape
-        loss = F.mse_loss(pred_rgbs, rgba)
+        loss = F.mse_loss(pred_rgbs, rgb)
         self.log('val_loss', loss, batch_size=N)
 
-        # TODO: Render image. For now lets just see what colors the rays are.
-        # feel like this will OOM at some point...
         if batch_idx == self.im_idx:
             all_o_rays = val_batch['all_origin']
             all_d_rays = val_batch['all_direc']
@@ -157,7 +161,6 @@ class NeRFNetwork(LightningModule):
 
             im = torch.cat(im, dim=0).view((H,W, C))
             im = torch_to_numpy(im, is_normalized_image=True)
-            # Image.fromarray(im.astype(np.uint8)).save('./val.png')
             self.logger.log_image(key='recon', images=[im], caption=[f'val/{self.im_idx}.png'])
             del im
         return loss
@@ -168,7 +171,7 @@ class SingleNeRF(LightningModule):
 
     Pytorch-Lightning Wrapper to train a single NeRF Model. Mostly for debugging purposes.
     """
-    def __init__(self, position_dim=10, direction_dim=4, num_samples=128, near=2.0, far=2.0):
+    def __init__(self, position_dim=10, direction_dim=4, num_samples=128, near=2.0, far=6.0):
         """NeRF Constructor.
 
         Args:
@@ -222,7 +225,7 @@ class SingleNeRF(LightningModule):
         # inputs
         o_rays = train_batch['origin'] 
         d_rays = train_batch['direc']
-        rgba =  train_batch['rgba']
+        rgb =  train_batch['rgb']
         
         # forward pass
         pred_dict = self.forward(o_rays, d_rays)
@@ -230,7 +233,7 @@ class SingleNeRF(LightningModule):
         
         # loss
         N, _ = pred_rgb.shape
-        loss = F.mse_loss(pred_rgb, rgba)
+        loss = F.mse_loss(pred_rgb, rgb)
         end = timer()
         self.log('train_loss', loss, batch_size=N)
         self.log('val iteration speed', end - start, batch_size=N)
@@ -243,7 +246,7 @@ class SingleNeRF(LightningModule):
         # inputs
         o_rays = val_batch['origin'] 
         d_rays = val_batch['direc']
-        rgba =  val_batch['rgba']
+        rgb =  val_batch['rgb']
         
         # forward pass
         pred_dict = self.forward(o_rays, d_rays)
@@ -251,7 +254,7 @@ class SingleNeRF(LightningModule):
         
         # loss
         N, _ = pred_rgbs.shape
-        loss = F.mse_loss(pred_rgbs, rgba)
+        loss = F.mse_loss(pred_rgbs, rgb)
         self.log('val_loss', loss, batch_size=N)
 
         all_o_rays = val_batch['all_origin']
@@ -315,7 +318,7 @@ class NeRFModel(nn.Module):
 
         self.density_fn = nn.Sequential(
             nn.Linear(256, 1),
-            nn.ReLU()  # rectified to ensure nonnegative density
+            nn.Square()  # rectified to ensure nonnegative density
         )
 
         self.rgb_fn = nn.Sequential(
