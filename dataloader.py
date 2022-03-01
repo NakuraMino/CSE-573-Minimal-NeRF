@@ -71,8 +71,6 @@ class SyntheticDataset(Dataset):
         self.data = json.load(file)
         self.frames = self.data['frames']
         self.camera_angle = self.data['camera_angle_x']
-        self.near = self.data['near']
-        self.far = self.data['far']
         self.focal = 0.5 * self.W / np.tan(0.5 * self.camera_angle)
         self._preprocess()
         file.close()
@@ -105,10 +103,10 @@ class SyntheticDataset(Dataset):
 
         # del image, cam_to_world, o_rays, d_rays
         if self.tvt == 'train':
-            return {'origin': origin, 'direc': direction, 'rgba': rgb, 'xs': xs, 'ys': ys, 'near': self.near, 'far': self.far}
+            return {'origin': origin, 'direc': direction, 'rgba': rgb, 'xs': xs, 'ys': ys}
         else: 
             return {'origin': origin, 'direc': direction, 'rgba': rgb, 'xs': xs, 'ys': ys, 
-                    'all_origin': o_rays, 'all_direc': d_rays, 'near': self.near, 'far': self.far}
+                    'all_origin': o_rays, 'all_direc': d_rays}
 
 def getSyntheticDataloader(base_dir, tvt, num_rays, num_workers=8, shuffle=True): 
     dataset = SyntheticDataset(base_dir, tvt, num_rays)

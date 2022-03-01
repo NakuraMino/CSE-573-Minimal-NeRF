@@ -32,7 +32,7 @@ class NeRFNetwork(LightningModule):
     in one model. 
     """
     def __init__(self, position_dim=10, direction_dim=4, coarse_samples=64,
-                 fine_samples=128):
+                 fine_samples=128, near=2.0, far=6.0):
         """NeRF Constructor.
 
         Args:
@@ -49,6 +49,8 @@ class NeRFNetwork(LightningModule):
         self.direction_dim = direction_dim
         self.coarse_samples = coarse_samples
         self.fine_samples = fine_samples
+        self.near = near
+        self.far = far
         self.coarse_network = NeRFModel(position_dim, direction_dim)
         self.fine_network = NeRFModel(position_dim, direction_dim)
         self.im_idx = 0
@@ -68,7 +70,7 @@ class NeRFNetwork(LightningModule):
                 'all_ts': [N x coarse*2+fine_samples x 1] time values along a ray direction.
         """
         # calculating coarse
-        coarse_samples, coarse_ts = nerf_helpers.generate_coarse_samples(o_rays, d_rays, self.coarse_samples)
+        coarse_samples, coarse_ts = nerf_helpers.generate_coarse_samples(o_rays, d_rays, self.coarse_samples, self.near, self.far)
         coarse_density, coarse_rgb =self.coarse_network(coarse_samples, d_rays)
         coarse_deltas = nerf_helpers.generate_deltas(coarse_ts)
 
@@ -166,7 +168,7 @@ class SingleNeRF(LightningModule):
 
     Pytorch-Lightning Wrapper to train a single NeRF Model. Mostly for debugging purposes.
     """
-    def __init__(self, position_dim=10, direction_dim=4, num_samples=128):
+    def __init__(self, position_dim=10, direction_dim=4, num_samples=128, near=2.0, far=2.0):
         """NeRF Constructor.
 
         Args:
@@ -182,6 +184,8 @@ class SingleNeRF(LightningModule):
         self.position_dim = position_dim
         self.direction_dim = direction_dim
         self.num_samples = num_samples
+        self.near = near
+        self.far = far
         self.network = NeRFModel(position_dim, direction_dim)
 
     def forward(self, o_rays, d_rays):
@@ -198,7 +202,7 @@ class SingleNeRF(LightningModule):
                 'all_ts': [N x coarse*2+fine_samples x 1] time values along a ray direction.
         """
         # calculating coarse
-        samples, ts = nerf_helpers.generate_coarse_samples(o_rays, d_rays, self.num_samples)
+        samples, ts = nerf_helpers.generate_coarse_samples(o_rays, d_rays, self.num_samples, self.near, self.far)
         density, rgb =self.network(samples, d_rays)
         deltas = nerf_helpers.generate_deltas(ts)
 
@@ -261,7 +265,7 @@ class SingleNeRF(LightningModule):
             im.append(recon_preds['pred_rgbs'])
         im = torch.cat(im, dim=0).view((H,W, C))
         im = torch_to_numpy(im, is_normalized_image=True)
-        self.logger.log_image(key='recon', images=[im], caption=[f'val/{self.im_idx}.png'])
+        self.logger.log_image(key='recon', images=[im], caption=[f'val/0.png'])
         del im
         return loss
 
