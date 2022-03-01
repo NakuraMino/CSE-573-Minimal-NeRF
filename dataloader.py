@@ -34,7 +34,8 @@ def get_rays(H, W, focal, c2w):
     return rays_o, rays_d
 
 def convert_to_ndc_rays(o_rays, d_rays, focal, width, height, near=1.0): 
-    """
+    """This is only for FRONT-FACING scenes.
+
     Args:
         o_rays: [H x W x 3] representing ray origin.
         d_rays: [H x W x 3] representing ray direction.
@@ -70,6 +71,8 @@ class SyntheticDataset(Dataset):
         self.data = json.load(file)
         self.frames = self.data['frames']
         self.camera_angle = self.data['camera_angle_x']
+        self.near = self.data['near']
+        self.far = self.data['far']
         self.focal = 0.5 * self.W / np.tan(0.5 * self.camera_angle)
         self._preprocess()
         file.close()
@@ -96,22 +99,16 @@ class SyntheticDataset(Dataset):
         image = (torch.Tensor(imageio.imread(frame['file_path'], pilmode="RGB")) / 255.0).float()  # [HxWx3]
         cam_to_world = torch.Tensor(frame['transform_matrix']) 
         o_rays, d_rays = get_rays(self.H, self.W, self.focal, cam_to_world)  # [HxWx3]
-        o_ndc_rays, d_ndc_rays = convert_to_ndc_rays(o_rays, d_rays, self.focal, 
-                                                     self.W, self.H, near=1.0)
         rgb = image[xs,ys,:]
-        origin = o_ndc_rays[xs, ys, :]
-        direction = d_ndc_rays[xs, ys, :]
+        origin = o_rays[xs, ys, :]
+        direction = d_rays[xs, ys, :]
 
         # del image, cam_to_world, o_rays, d_rays
         if self.tvt == 'train':
-            return {'origin': origin, 'direc': direction, 'rgba': rgb, 'xs': xs, 'ys': ys}
+            return {'origin': origin, 'direc': direction, 'rgba': rgb, 'xs': xs, 'ys': ys, 'near': self.near, 'far': self.far}
         else: 
             return {'origin': origin, 'direc': direction, 'rgba': rgb, 'xs': xs, 'ys': ys, 
-                    'all_origin': o_ndc_rays, 'all_direc': d_ndc_rays, 'o_rays': o_rays,
-                    'd_rays': d_rays}        
-            # return {'origin': origin, 'direc': direction, 'rgba': rgb, 'xs': xs, 'ys': ys, 
-            #         'all_origin': o_ndc_rays, 'all_direc': d_ndc_rays}
-        
+                    'all_origin': o_rays, 'all_direc': d_rays, 'near': self.near, 'far': self.far}
 
 def getSyntheticDataloader(base_dir, tvt, num_rays, num_workers=8, shuffle=True): 
     dataset = SyntheticDataset(base_dir, tvt, num_rays)
