@@ -7,6 +7,7 @@ from nerf_to_recon import photo_nerf_to_image, torch_to_numpy
 import nerf_helpers
 from PIL import Image
 import random
+from timeit import default_timer as timer
 
 def positional_encoding(x, dim=10):
     """project input to higher dimensional space as a positional encoding.
@@ -99,6 +100,7 @@ class NeRFNetwork(LightningModule):
         return optimizer
 
     def training_step(self, train_batch, batch_idx):
+        start = timer()
         nerf_helpers.fix_batchify(train_batch)
         # inputs
         o_rays = train_batch['origin'] 
@@ -112,7 +114,9 @@ class NeRFNetwork(LightningModule):
         # loss
         N, _ = pred_rgb.shape
         loss = F.mse_loss(pred_rgb, rgba)
+        end = timer()
         self.log('train_loss', loss, batch_size=N)
+        self.log('train iteration speed', end - start, batch_size=N)
         return loss
 
     def validation_step(self, val_batch, batch_idx):
@@ -209,6 +213,7 @@ class SingleNeRF(LightningModule):
         return optimizer
 
     def training_step(self, train_batch, batch_idx):
+        start = timer()
         nerf_helpers.fix_batchify(train_batch)
         # inputs
         o_rays = train_batch['origin'] 
@@ -222,7 +227,9 @@ class SingleNeRF(LightningModule):
         # loss
         N, _ = pred_rgb.shape
         loss = F.mse_loss(pred_rgb, rgba)
+        end = timer()
         self.log('train_loss', loss, batch_size=N)
+        self.log('val iteration speed', end - start, batch_size=N)
         return loss
 
     def validation_step(self, val_batch, batch_idx):
