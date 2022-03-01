@@ -13,7 +13,7 @@ def fix_batchify(batch):
     for key, value in batch.items():
         batch[key] = value.squeeze(0) # in-place operation
 
-def generate_coarse_samples(o_rays: torch.Tensor, d_rays: torch.Tensor, num_samples: int): 
+def generate_coarse_samples(o_rays: torch.Tensor, d_rays: torch.Tensor, num_samples: int, near=2.0, far=6.0): 
     """Generates [N x num_samples x 3] coordinate samples.
 
     Args: 
@@ -27,7 +27,7 @@ def generate_coarse_samples(o_rays: torch.Tensor, d_rays: torch.Tensor, num_samp
     N, _ = o_rays.shape
     o_rays = o_rays.unsqueeze(1)
     d_rays = d_rays.unsqueeze(1)
-    ts = torch.broadcast_to(torch.linspace(0,(num_samples-1)/num_samples, num_samples, device=device)[None, ...], 
+    ts = torch.broadcast_to(torch.linspace(near, far, num_samples, device=device)[None, ...], 
                             (N, num_samples))
     rand = torch.rand(ts.shape, device=device)
     ts = ts + (rand / num_samples)
