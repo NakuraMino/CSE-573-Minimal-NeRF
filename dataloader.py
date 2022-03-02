@@ -16,7 +16,7 @@ def image_to_tensor(image):
         tensor = torch.from_numpy(image).permute(2,0,1).float()
     return tensor
 
-def sample_random_coordinates(N, height, width, cropping=False): 
+def sample_random_coordinates(N, height, width): 
     """Two [N,] torch tensors representing random coordinates.
 
     Args:
@@ -27,14 +27,8 @@ def sample_random_coordinates(N, height, width, cropping=False):
         xs: [N,] torch tensor of random ints [0,width)
         ys: [N,] torch tensor of random ints [0,height)
     """
-    if cropping:
-        edge_width = width // 4
-        edge_height = height // 4
-        xs = torch.randint(edge_width, width - edge_width, size=(N,))
-        ys = torch.randint(edge_height, height - edge_height, size=(N,))
-    else:
-        xs = torch.randint(0, width, size=(N,))
-        ys = torch.randint(0, height, size=(N,))
+    xs = torch.randint(0, width, size=(N,))
+    ys = torch.randint(0, height, size=(N,))
     return xs, ys
 
 def get_rays(H, W, focal, c2w):
@@ -79,31 +73,28 @@ def convert_to_ndc_rays(o_rays, d_rays, focal, width, height, near=1.0):
 class SyntheticDataset(Dataset):
     """Dataset for Synthetic images."""
 
-    def __init__(self, base_dir, tvt, num_rays, cropping=0):
+    def __init__(self, base_dir, tvt, num_rays):
         """Constructor.
 
         Args:
             base_dir: str or path to dataset directory.
             tvt: str of either "train", "val", or "test".
             num_rays: number of rays to sample per batch / image.
-            cropping: number of iterations to crop input image.
         """ 
-        self._setup(base_dir, tvt, num_rays, cropping)
+        self._setup(base_dir, tvt, num_rays)
         file = open(Path(self.base_dir, f'transforms_{tvt}.json'))
         self.data = json.load(file)
         self.frames = self.data['frames']
         self.camera_angle = self.data['camera_angle_x']
         self.focal = 0.5 * self.W / np.tan(0.5 * self.camera_angle)
-        self.cropping = cropping
         self._preprocess()
         file.close()
 
-    def _setup(self, base_dir, tvt, num_rays, cropping): 
+    def _setup(self, base_dir, tvt, num_rays): 
         # we know synthetic images are 800x800.
         self.H = 800
         self.W = 800
         self.tvt = tvt
-        self.cropping = cropping
         self.num_rays = num_rays
         self.base_dir = base_dir
 
@@ -119,14 +110,13 @@ class SyntheticDataset(Dataset):
     def __getitem__(self, idx):
         frame = self.frames[idx]
         # retrieve image 
-        xs, ys = sample_random_coordinates(self.num_rays, self.H, self.W, cropping=self.cropping > 0) # (N,), (N,)
+        xs, ys = sample_random_coordinates(self.num_rays, self.H, self.W) # (N,), (N,)
         image = (torch.Tensor(imageio.imread(frame['file_path'], pilmode="RGB")) / 255.0).float()  # [HxWx3]
         cam_to_world = torch.Tensor(frame['transform_matrix']) 
         o_rays, d_rays = get_rays(self.H, self.W, self.focal, cam_to_world)  # [HxWx3]
-        rgb = image[xs,ys,:]
-        origin = o_rays[xs, ys, :]
-        direction = d_rays[xs, ys, :]
-        self.cropping -= 1
+        rgb = image[ys,xs,:]
+        origin = o_rays[ys, xs, :]
+        direction = d_rays[ys, xs, :]
         del image, cam_to_world
         if self.tvt == 'train':
             return {'origin': origin, 'direc': direction, 'rgb': rgb, 'xs': xs, 'ys': ys}
@@ -134,8 +124,8 @@ class SyntheticDataset(Dataset):
             return {'origin': origin, 'direc': direction, 'rgb': rgb, 'xs': xs, 'ys': ys,
                     'all_origin': o_rays, 'all_direc': d_rays}
 
-def getSyntheticDataloader(base_dir, tvt, num_rays, cropping=1000, num_workers=8, shuffle=True): 
-    dataset = SyntheticDataset(base_dir, tvt, num_rays, cropping=cropping)
+def getSyntheticDataloader(base_dir, tvt, num_rays, num_workers=8, shuffle=True): 
+    dataset = SyntheticDataset(base_dir, tvt, num_rays)
     return DataLoader(dataset=dataset, batch_size=1, shuffle=shuffle, num_workers=num_workers)
 
 class PhotoDataset(Dataset):

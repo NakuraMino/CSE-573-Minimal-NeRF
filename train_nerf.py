@@ -24,27 +24,24 @@ def train_full_nerf(root_dir, base_dir, logger_name, steps, pos_enc, direc_enc, 
     trainer = Trainer(gpus=int(use_gpu), default_root_dir=root_dir, max_steps=steps, 
                       resume_from_checkpoint=ckpt, logger=wandb_logger,
                       check_val_every_n_epoch=10, track_grad_norm=2)
-    train_dl = dataloader.getSyntheticDataloader(base_dir, 'train', num_rays, 
-                                                 cropping=cropping, num_workers=2, shuffle=True)
-    val_dl = dataloader.getSyntheticDataloader(base_dir, 'val', num_rays, 
-                                               cropping=cropping, num_workers=2, shuffle=False)
+    train_dl = dataloader.getSyntheticDataloader(base_dir, 'train', num_rays, num_workers=2, shuffle=True)
+    val_dl = dataloader.getSyntheticDataloader(base_dir, 'val', num_rays, num_workers=2, shuffle=False)
     model = nerf_model.NeRFNetwork(position_dim=pos_enc, direction_dim=direc_enc, 
                                    coarse_samples=coarse_samples, fine_samples=fine_samples,
-                                   near=near, far=far)
+                                   near=near, far=far, cropping=cropping)
     trainer.fit(model, train_dl, val_dl)
 
 def train_single_nerf(root_dir, base_dir, logger_name, steps, pos_enc, direc_enc, use_gpu, 
-                      num_rays, samples, cropping, ckpt, args):
+                      num_rays, samples, ckpt, args):
     """Train single NeRF model (coarse network f(x,y,z,theta,rho)->rgb+sigma""" 
     wandb_logger = WandbLogger(name=logger_name, project="NeRF")
     wandb_logger.log_hyperparams(args)
     trainer = Trainer(gpus=int(use_gpu), default_root_dir=root_dir, max_steps=steps,
                       resume_from_checkpoint=ckpt, logger=wandb_logger,
                       check_val_every_n_epoch=10, track_grad_norm=2)
-    train_dl = dataloader.getSyntheticDataloader(base_dir, 'train', num_rays, cropping=cropping, 
+    train_dl = dataloader.getSyntheticDataloader(base_dir, 'train', num_rays,
                                                  num_workers=8, shuffle=True)
-    val_dl = dataloader.getSyntheticDataloader(base_dir, 'val', num_rays, cropping=cropping, 
-                                               num_workers=8, shuffle=False)
+    val_dl = dataloader.getSyntheticDataloader(base_dir, 'val', num_rays, num_workers=8, shuffle=False)
     model = nerf_model.SingleNeRF(position_dim=pos_enc, direction_dim=direc_enc, num_samples=samples)
     trainer.fit(model, train_dl, val_dl)
 
@@ -70,7 +67,6 @@ if __name__ == '__main__':
     parser.add_argument('-d', '--direction_encoding', type=int, default=4, help='direction encoding length')
     parser.add_argument('-rd', '--root_dir', type=str, default="/home/nakuram/CSEP573-NeRF/experiments/", help='directory to save models')
     parser.add_argument('-r', '--rays', type=int, default=4096, help='number of rays per batch')
-    parser.add_argument('-cr', '--cropping', type=int, default=1000, help='number of iterations to crop the image/region.')
     parser.add_argument('-l', '--ckpt', type=str, default=None, help='load/resume from checkpoint. Should be a path (e.g. ./checkpoints/last.ckpt')
 
     simple_parser = subparsers.add_parser("simple")
@@ -82,6 +78,8 @@ if __name__ == '__main__':
     full_parser.add_argument('-f', '--fine', type=int, default=128, help='number of fine samples')
     full_parser.add_argument('-nr', '--near', type=float, default=2.0, help='near bound for dataset')
     full_parser.add_argument('-fr', '--far', type=int, default=6.0, help='far bound of dataset')
+    full_parser.add_argument('-cr', '--cropping', type=int, default=1000, help='number of iterations to crop the image/region.')
+
 
     single_parser.add_argument('-b', '--base_dir', type=str, default='./dev_data/', help='directory for dataset')
     single_parser.add_argument('-c', '--samples', type=int, default=128, help='number of samples')
@@ -97,8 +95,7 @@ if __name__ == '__main__':
                         args.far, args.cropping, args.ckpt, args)
     elif args.type == 'single': 
         train_single_nerf(args.root_dir, args.base_dir, args.name, args.steps, args.position_encoding,
-                          args.direction_encoding, args.gpu, args.rays, args.samples, args.cropping, 
-                          args.ckpt, args)
+                          args.direction_encoding, args.gpu, args.rays, args.samples, args.ckpt, args)
     elif args.type == 'simple': 
         train_simple_image(args.root_dir, args.im_path, args.name, args.steps, args.position_encoding, args.gpu, args.rays,
                            args.ckpt, args)

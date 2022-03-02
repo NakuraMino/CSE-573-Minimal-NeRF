@@ -26,11 +26,6 @@ def positional_encoding(x, dim=10):
     return positional_encoding
 
 
-class Square(nn.Module):
-    def forward(self, x):
-        return torch.square(x)
-
-
 class NeRFNetwork(LightningModule):
     """A full NeRF Network.
 
@@ -38,7 +33,7 @@ class NeRFNetwork(LightningModule):
     in one model. 
     """
     def __init__(self, position_dim=10, direction_dim=4, coarse_samples=64,
-                 fine_samples=128, near=2.0, far=6.0):
+                 fine_samples=128, near=2.0, far=6.0, cropping=1000):
         """NeRF Constructor.
 
         Args:
@@ -49,6 +44,7 @@ class NeRFNetwork(LightningModule):
             coarse_samples: number of samples for the coarse network.
             fine_samples: number of additional samples for the fine network. (i.e. fine network 
                 gets coarse+fine samples)
+            cropping: number of training iterations to crop image.
         """
         super(NeRFNetwork, self).__init__()
         self.position_dim = position_dim
@@ -61,6 +57,7 @@ class NeRFNetwork(LightningModule):
         self.fine_network = NeRFModel(position_dim, direction_dim)
         self.im_idx = 0
         self.max_idx = 1
+        self.cropping = cropping
         self.timer = timer()
 
     def forward(self, o_rays, d_rays):
@@ -79,8 +76,8 @@ class NeRFNetwork(LightningModule):
         # calculating coarse
         coarse_samples, coarse_ts = nerf_helpers.generate_coarse_samples(o_rays, d_rays, self.coarse_samples, self.near, self.far)
         coarse_density, coarse_rgb =self.coarse_network(coarse_samples, d_rays)
-        self.log('coarse_density_norms', torch.linalg.norm(coarse_density))
-        self.log('coarse_density_non_zeros', (coarse_density != 0).sum())
+        self.log('coarse_density_norms', torch.linalg.norm(coarse_density), 1)
+        self.log('coarse_density_non_zeros', (coarse_density != 0).sum().float(), 1)
         coarse_deltas = nerf_helpers.generate_deltas(coarse_ts)
 
         weights = nerf_helpers.calculate_unnormalized_weights(coarse_density, coarse_deltas)
@@ -90,8 +87,8 @@ class NeRFNetwork(LightningModule):
         fine_samples = torch.cat([fine_samples, coarse_samples], axis=1)
         fine_ts = torch.cat([fine_ts, coarse_ts], axis=1)
         fine_density, fine_rgb = self.fine_network(fine_samples, d_rays)
-        self.log('fine_density', torch.linalg.norm(fine_density))
-        self.log('fine_density_non_zeros', (fine_density != 0).sum())
+        self.log('fine_density', torch.linalg.norm(fine_density), 1)
+        self.log('fine_density_non_zeros', (fine_density != 0).sum().float(), 1)
 
         # sort ts to be sequential (in order to calculate deltas correctly) and sort density and rgb to align.
         all_ts = torch.cat([coarse_ts, fine_ts], dim=1)
@@ -118,7 +115,9 @@ class NeRFNetwork(LightningModule):
         o_rays = train_batch['origin'] 
         d_rays = train_batch['direc']
         rgb =  train_batch['rgb']
-        
+        o_rays, d_rays, rgb = self._crop_rays_outside_center(train_batch['xs'], 
+                                                             train_batch['ys'],
+                                                             o_rays, d_rays, rgb)
         # forward pass
         pred_dict = self.forward(o_rays, d_rays)
         pred_rgb = pred_dict['pred_rgbs']
@@ -159,6 +158,37 @@ class NeRFNetwork(LightningModule):
             self.logger.log_image(key='recon', images=[im], caption=[f'val/{self.im_idx}.png'])
             del im
         return loss
+
+    def _crop_rays_outside_center(self, xs, ys, o_rays, d_rays, rgb, edge_width=150):
+        """Rejects any samples that are outside of the edge with for the next self.cropping iterations. 
+
+        Sampling towards the center when starting training is beneficial because 
+        border rgb pixels are (0,0,0) which are not helpful for training. I wanted to
+        put this in the dataloader itself, but there's no good ways to keep track of num. 
+        iters in the dataloader since it resets every epoch. Hence I put it in the trainer module.
+
+        Args:
+            xs: [N,] torch tensor of random ints [0,width)
+            ys: [N,] torch tensor of random ints [0,height)
+            o_rays: [N x 3] coordinates of the ray origin.
+            d_rays: [N x 3] directions of the ray.
+            rgb: [N x 3] tensor of colors.
+            edge_width: any pixel from the outer edge of the image to the edge_width inwards
+                        is removed.
+            Returns:
+                o_rays, d_rays, and rgb but only in the indices within bounds.
+        """
+        if self.cropping > 0:
+            IM_HEIGHT = 800 
+            IM_WIDTH = 800
+            x_idxs = torch.logical_and(xs > edge_width, xs < IM_WIDTH - edge_width)
+            y_idxs = torch.logical_and(ys > edge_width, ys < IM_HEIGHT - edge_width)
+            idxs = torch.logical_and(x_idxs, y_idxs)
+            o_rays = o_rays[idxs,:] 
+            d_rays = d_rays[idxs,:]
+            rgb = rgb[idxs,:]
+            self.cropping -= 1
+        return o_rays, d_rays, rgb
 
 
 class SingleNeRF(LightningModule):
