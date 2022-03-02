@@ -71,7 +71,7 @@ if __name__ == '__main__':
     parser.add_argument('-rd', '--root_dir', type=str, default="/home/nakuram/CSEP573-NeRF/experiments/", help='directory to save models')
     parser.add_argument('-r', '--rays', type=int, default=4096, help='number of rays per batch')
     parser.add_argument('-cr', '--cropping', type=int, default=1000, help='number of iterations to crop the image/region.')
-    parser.add_argument('-l' '--ckpt', type=str, default=None, help='load/resume from checkpoint. Should be a path (e.g. ./checkpoints/last.ckpt')
+    parser.add_argument('-l', '--ckpt', type=str, default=None, help='load/resume from checkpoint. Should be a path (e.g. ./checkpoints/last.ckpt')
 
     simple_parser = subparsers.add_parser("simple")
     full_parser = subparsers.add_parser("full")
