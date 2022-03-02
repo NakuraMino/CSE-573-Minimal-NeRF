@@ -30,7 +30,6 @@ def sample_random_coordinates(N, height, width, cropping=False):
     if cropping:
         edge_width = width // 4
         edge_height = height // 4
-        print(edge_width, width - edge_width)
         xs = torch.randint(edge_width, width - edge_width, size=(N,))
         ys = torch.randint(edge_height, height - edge_height, size=(N,))
     else:
