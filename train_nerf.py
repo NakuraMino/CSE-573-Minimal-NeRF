@@ -4,10 +4,11 @@ Usage Examples:
     python train_nerf.py -n test -s 10 simple: train simple/toy nerf with experiment name test for 10 steps.
     python train_nerf.py -n test --gpu full: trains full nerf model on a gpu with experiment name test.
 
-My personal laptop use: 
+My personal use: 
     python train_nerf.py -n laptop -s 10 -rd ./ full -b ./data/lego/
-
-
+    python train_nerf.py -n colab --gpu -rd /content/drive/MyDrive/ -r 3072 \
+                         -l /content/drive/MyDrive/NeRF/2lt9kr5h/checkpoints/ \
+                         full -b ./data/nerf_synthetic/lego/
 """
 from pytorch_lightning import Trainer
 from pytorch_lightning.loggers import WandbLogger
@@ -16,37 +17,44 @@ import nerf_model
 import argparse
 
 def train_full_nerf(root_dir, base_dir, logger_name, steps, pos_enc, direc_enc, use_gpu,
-                    num_rays, coarse_samples, fine_samples, near, far, cropping, args):
+                    num_rays, coarse_samples, fine_samples, near, far, cropping, ckpt, args):
     """Train full NeRF model (coarse+fine network f(x,y,z,theta,rho)->rgb+sigma""" 
     wandb_logger = WandbLogger(name=logger_name, project="NeRF")
     wandb_logger.log_hyperparams(args)
-    trainer = Trainer(gpus=int(use_gpu), default_root_dir=root_dir, max_steps=steps,
-                      logger=wandb_logger, check_val_every_n_epoch=10, track_grad_norm=2)
-    train_dl = dataloader.getSyntheticDataloader(base_dir, 'train', num_rays, cropping=cropping, num_workers=2, shuffle=True)
-    val_dl = dataloader.getSyntheticDataloader(base_dir, 'val', num_rays, cropping=cropping, num_workers=2, shuffle=False)
+    trainer = Trainer(gpus=int(use_gpu), default_root_dir=root_dir, max_steps=steps, 
+                      resume_from_checkpoint=ckpt, logger=wandb_logger,
+                      check_val_every_n_epoch=10, track_grad_norm=2)
+    train_dl = dataloader.getSyntheticDataloader(base_dir, 'train', num_rays, 
+                                                 cropping=cropping, num_workers=2, shuffle=True)
+    val_dl = dataloader.getSyntheticDataloader(base_dir, 'val', num_rays, 
+                                               cropping=cropping, num_workers=2, shuffle=False)
     model = nerf_model.NeRFNetwork(position_dim=pos_enc, direction_dim=direc_enc, 
                                    coarse_samples=coarse_samples, fine_samples=fine_samples,
                                    near=near, far=far)
     trainer.fit(model, train_dl, val_dl)
 
 def train_single_nerf(root_dir, base_dir, logger_name, steps, pos_enc, direc_enc, use_gpu, 
-                      num_rays, samples, cropping, args):
+                      num_rays, samples, cropping, ckpt, args):
     """Train single NeRF model (coarse network f(x,y,z,theta,rho)->rgb+sigma""" 
     wandb_logger = WandbLogger(name=logger_name, project="NeRF")
     wandb_logger.log_hyperparams(args)
-    trainer = Trainer(gpus=int(use_gpu), default_root_dir=root_dir, 
-                      max_steps=steps, logger=wandb_logger, check_val_every_n_epoch=10, track_grad_norm=2)
-    train_dl = dataloader.getSyntheticDataloader(base_dir, 'train', num_rays, cropping=cropping, num_workers=8, shuffle=True)
-    val_dl = dataloader.getSyntheticDataloader(base_dir, 'val', num_rays, cropping=cropping, num_workers=8, shuffle=False)
+    trainer = Trainer(gpus=int(use_gpu), default_root_dir=root_dir, max_steps=steps,
+                      resume_from_checkpoint=ckpt, logger=wandb_logger,
+                      check_val_every_n_epoch=10, track_grad_norm=2)
+    train_dl = dataloader.getSyntheticDataloader(base_dir, 'train', num_rays, cropping=cropping, 
+                                                 num_workers=8, shuffle=True)
+    val_dl = dataloader.getSyntheticDataloader(base_dir, 'val', num_rays, cropping=cropping, 
+                                               num_workers=8, shuffle=False)
     model = nerf_model.SingleNeRF(position_dim=pos_enc, direction_dim=direc_enc, num_samples=samples)
     trainer.fit(model, train_dl, val_dl)
 
-def train_simple_image(root_dir, im_path, logger_name, steps, pos_enc, use_gpu, batch_size, args): 
+def train_simple_image(root_dir, im_path, logger_name, steps, pos_enc, use_gpu, batch_size, ckpt, args): 
     """Train a toy nerf model (e.g. f(x,y) -> rgb)."""
     wandb_logger = WandbLogger(name=logger_name, project="NeRF")
     wandb_logger.log_hyperparams(args)
     trainer = Trainer(gpus=int(use_gpu), default_root_dir=root_dir, 
-                      max_steps=steps, logger=wandb_logger, check_val_every_n_epoch=10)
+                      max_steps=steps, logger=wandb_logger, resume_from_checkpoint=ckpt, 
+                      check_val_every_n_epoch=10)
     train_dl = dataloader.getPhotoDataloader(im_path, batch_size=batch_size, num_workers=8, shuffle=True)
     val_dl = dataloader.getValDataloader(im_path, batch_size=1, num_workers=8, shuffle=False)
     model = nerf_model.ImageNeRFModel(position_dim=pos_enc)
@@ -63,6 +71,7 @@ if __name__ == '__main__':
     parser.add_argument('-rd', '--root_dir', type=str, default="/home/nakuram/CSEP573-NeRF/experiments/", help='directory to save models')
     parser.add_argument('-r', '--rays', type=int, default=4096, help='number of rays per batch')
     parser.add_argument('-cr', '--cropping', type=int, default=1000, help='number of iterations to crop the image/region.')
+    parser.add_argument('-l' '--ckpt', type=str, default=None, help='load/resume from checkpoint. Should be a path (e.g. ./checkpoints/last.ckpt')
 
     simple_parser = subparsers.add_parser("simple")
     full_parser = subparsers.add_parser("full")
@@ -85,9 +94,11 @@ if __name__ == '__main__':
     if args.type == 'full':
         train_full_nerf(args.root_dir, args.base_dir, args.name, args.steps, args.position_encoding, 
                         args.direction_encoding, args.gpu, args.rays, args.coarse, args.fine, args.near,
-                        args.far, args.cropping, args)
+                        args.far, args.cropping, args.ckpt, args)
     elif args.type == 'single': 
         train_single_nerf(args.root_dir, args.base_dir, args.name, args.steps, args.position_encoding,
-                          args.direction_encoding, args.gpu, args.rays, args.samples, args.cropping, args)
+                          args.direction_encoding, args.gpu, args.rays, args.samples, args.cropping, 
+                          args.ckpt, args)
     elif args.type == 'simple': 
-        train_simple_image(args.root_dir, args.im_path, args.name, args.steps, args.position_encoding, args.gpu, args.rays, args)
+        train_simple_image(args.root_dir, args.im_path, args.name, args.steps, args.position_encoding, args.gpu, args.rays,
+                           args.ckpt, args)
