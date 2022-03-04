@@ -9,6 +9,10 @@ from PIL import Image
 import random
 from timeit import default_timer as timer
 
+
+ACT_FN = nn.LReLU(0.1)  # nn.ReLU()
+
+
 def positional_encoding(x, dim=10):
     """project input to higher dimensional space as a positional encoding.
 
@@ -281,20 +285,20 @@ class NeRFModel(nn.Module):
         self.idx = 0
         self.mlp = nn.Sequential(
             nn.Linear(self.position_dim*2*3, 256),
-            nn.ReLU(),
+            ACT_FN,
             nn.Linear(256, 256),
-            nn.ReLU(),
+            ACT_FN,
             nn.Linear(256, 256),
-            nn.ReLU(),
+            ACT_FN,
             nn.Linear(256, 256),
-            nn.ReLU()
+            ACT_FN
         )
 
         self.feature_fn = nn.Sequential(
             nn.Linear(256 + self.position_dim*2*3, 256),
-            nn.ReLU(),
+            ACT_FN,
             nn.Linear(256, 256),
-            nn.ReLU(),
+            ACT_FN,
             nn.Linear(256, 256),
             # nn.ReLU(),
         )
@@ -306,7 +310,7 @@ class NeRFModel(nn.Module):
 
         self.rgb_fn = nn.Sequential(
             nn.Linear(256 + self.direction_dim*2*3, 128),
-            nn.ReLU(),
+            ACT_FN,
             nn.Linear(128, 3),
             nn.Sigmoid()
         )
