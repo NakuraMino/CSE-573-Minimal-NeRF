@@ -146,7 +146,7 @@ class SyntheticDataset(Dataset):
                     'all_origin': o_rays, 'all_direc': d_rays}
 
 def getSyntheticDataloader(base_dir, tvt, num_rays, prop=0.0, num_workers=8, shuffle=True): 
-    dataset = SyntheticDataset(base_dir, tvt, num_rays)
+    dataset = SyntheticDataset(base_dir, tvt, num_rays, prop=prop)
     return DataLoader(dataset=dataset, batch_size=1, shuffle=shuffle, num_workers=num_workers)
 
 class PhotoDataset(Dataset):

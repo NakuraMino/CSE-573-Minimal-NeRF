@@ -25,7 +25,7 @@ def train_full_nerf(root_dir, base_dir, logger_name, steps, pos_enc, direc_enc, 
                       resume_from_checkpoint=ckpt, logger=wandb_logger,
                       check_val_every_n_epoch=10, track_grad_norm=2)
     train_dl = dataloader.getSyntheticDataloader(base_dir, 'train', num_rays, prop=prop, num_workers=2, shuffle=True)
-    val_dl = dataloader.getSyntheticDataloader(base_dir, 'val', num_rays, num_workers=2, shuffle=False)
+    val_dl = dataloader.getSyntheticDataloader(base_dir, 'val', num_rays, prop=prop, num_workers=2, shuffle=False)
     model = nerf_model.NeRFNetwork(position_dim=pos_enc, direction_dim=direc_enc, 
                                    coarse_samples=coarse_samples, fine_samples=fine_samples,
                                    near=near, far=far)
@@ -78,7 +78,7 @@ if __name__ == '__main__':
     full_parser.add_argument('-f', '--fine', type=int, default=128, help='number of fine samples')
     full_parser.add_argument('-nr', '--near', type=float, default=2.0, help='near bound for dataset')
     full_parser.add_argument('-fr', '--far', type=int, default=6.0, help='far bound of dataset')
-    full_parser.add_argument('-pr', '--prop', type=int, default=0.7, help='proportion of samples that have alpha > 0')
+    full_parser.add_argument('-pr', '--prop', type=float, default=0.7, help='proportion of samples that have alpha > 0')
 
     single_parser.add_argument('-b', '--base_dir', type=str, default='./dev_data/', help='directory for dataset')
     single_parser.add_argument('-c', '--samples', type=int, default=128, help='number of samples')
