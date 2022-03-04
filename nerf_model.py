@@ -3,14 +3,13 @@ import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
 from pytorch_lightning import LightningModule
-from nerf_to_recon import photo_nerf_to_image, torch_to_numpy
 import nerf_helpers
 from PIL import Image
 import random
 from timeit import default_timer as timer
 
 
-ACT_FN = nn.LReLU(0.1)  # nn.ReLU()
+ACT_FN = nn.LeakyReLU(0.1)  # nn.ReLU()
 
 
 def positional_encoding(x, dim=10):
@@ -151,12 +150,12 @@ class NeRFNetwork(LightningModule):
         loss = F.mse_loss(pred_rgbs, rgb)
         self.log('val_loss', loss, batch_size=N)
 
-        if batch_idx == self.im_idx:
-            all_o_rays = val_batch['all_origin']
-            all_d_rays = val_batch['all_direc']
-            im = nerf_helpers.view_reconstruction(self, all_o_rays, all_d_rays, N=N)
-            self.logger.log_image(key='recon', images=[im], caption=[f'val/{self.im_idx}.png'])
-            del im
+        # if batch_idx == self.im_idx:
+        #     all_o_rays = val_batch['all_origin']
+        #     all_d_rays = val_batch['all_direc']
+        #     im = nerf_helpers.view_reconstruction(self, all_o_rays, all_d_rays, N=N)
+        #     self.logger.log_image(key='recon', images=[im], caption=[f'val/{self.im_idx}.png'])
+        #     del im
         return loss
 
 
@@ -300,7 +299,6 @@ class NeRFModel(nn.Module):
             nn.Linear(256, 256),
             ACT_FN,
             nn.Linear(256, 256),
-            # nn.ReLU(),
         )
 
         self.density_fn = nn.Sequential(
@@ -325,7 +323,6 @@ class NeRFModel(nn.Module):
             density: [N x samples x 1] density predictions.
             rgb: [N x samples x 3] color/rgb predictions.
         """
-        # self._change_density_activation()
         # direction needs to be broadcasted since it hasn't been sampled
         direc = torch.broadcast_to(direc[:, None, :], samples.shape)
         # positional encodings
@@ -341,12 +338,6 @@ class NeRFModel(nn.Module):
         dim_features = torch.cat((x_features, pos_enc_direc), dim=-1)
         rgb = self.rgb_fn(dim_features)
         return density, rgb
-
-    # def _change_density_activation(self): 
-    #     self.idx += 1
-    #     if self.idx == 1000:
-    #         use_relu = list(self.density_fn.children())[:-1] + [nn.ReLU()]
-    #         self.density_fn = nn.Sequential(*use_relu)
 
 
 class ImageNeRFModel(LightningModule):
@@ -424,8 +415,8 @@ class ImageNeRFModel(LightningModule):
         learning or not.
         """
         im_h, im_w = val_batch
-        im = photo_nerf_to_image(self, im_h, im_w)
-        im = torch_to_numpy(im, is_normalized_image=True)
+        im = nerf_helpers.photo_nerf_to_image(self, im_h, im_w)
+        im = nerf_helpers.torch_to_numpy(im, is_normalized_image=True)
         im = Image.fromarray(im.astype(np.uint8))
         self.logger.log_image(key='recon', images=[im])
         return 0

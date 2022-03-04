@@ -1,6 +1,6 @@
 import torch
 import numpy as np
-from nerf_to_recon import torch_to_numpy
+import itertools
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
@@ -135,7 +135,21 @@ def inverse_transform_sampling(o_rays: torch.Tensor, d_rays: torch.Tensor, weigh
     del cdf, idxs, bins, samples, eps
     return fine_samples, fine_ts
 
+"""""""""""""""
+View / Image reconstruction utilities
+"""""""""""""""
+
 def view_reconstruction(model, all_o_rays, all_d_rays, N=4096):
+    """Queries the model at every ray direction to generate an image from a view.
+    
+    Args:
+        model: a nerf_model.ImageNeRFModel object 
+        all_o_rays: [H x W x 3] vector of 3D origins. (should all be identical)
+        all_d_rays: [H x W x 3] vector of directions.
+        N: batch size to pass through model.
+    Returns:
+        an [im_h x im_w x 3] numpy array representing an image.
+    """
     H, W, C = all_o_rays.shape
     all_o_rays = all_o_rays.view((H*W, C))
     all_d_rays = all_d_rays.view((H*W, C))
@@ -146,3 +160,55 @@ def view_reconstruction(model, all_o_rays, all_d_rays, N=4096):
     im = torch.cat(im, dim=0).view((H,W, C))
     im = torch_to_numpy(im, is_normalized_image=True)
     return im
+
+def photo_nerf_to_image(model, im_h, im_w): 
+    """Queries the model at every idx to generate an image 
+    
+    Args:
+        model: a nerf_model.ImageNeRFModel object 
+        im_h: the height of the image 
+        im_w: the width of the image 
+    Returns:
+        an [im_h x im_w x 3] tensor representing an image.
+    """
+    if type(im_h) != int:
+        im_h = int(im_h[0])
+        im_w = int(im_w[0])
+    idxs = [(i,j) for i,j in itertools.product(np.arange(0,im_h), np.arange(0,im_w))]
+    idxs = torch.FloatTensor(idxs).to(model.device)
+    idxs[:,0] /= (im_h-1)
+    idxs[:,1] /= (im_w-1)
+    N, _ = idxs.shape
+    recon = []
+    step = 4096
+    for i in range(0, N, step):
+        # break up whole tensor into sizeable chunks
+        batch = idxs[i:i+step,:]
+        rgb = model(batch)
+        recon.append(rgb)
+    recon = torch.cat(recon, axis=0).reshape((im_h, im_w, 3))
+    return recon
+
+def torch_to_numpy(torch_tensor, is_normalized_image = False):
+    """ Converts torch tensor (...CHW) to numpy tensor (...HWC) for plotting
+    
+        If it's a normalized image, it puts it back in [0,255] range
+    """
+    np_tensor = torch_tensor.cpu().clone().detach().numpy()
+    if np_tensor.ndim >= 4: # ...CHW -> ...HWC
+        np_tensor = np.moveaxis(np_tensor, [-3,-2,-1], [-1,-3,-2])
+    if is_normalized_image:
+        np_tensor *= 255
+        np_tensor = np.clip(np_tensor, 0, 255)
+    return np_tensor
+
+def save_torch_as_image(torch_tensor, file_path, is_normalized_image=False):
+    """ saves torch tensor as a sequence of images
+
+        @param torch_tensor: [N x C x H x W] tensor or a single [H x W x C] tensor
+        @param file_path: place to save file to
+        @param is_normalized_image: whether the image is normalized or not
+    """
+    im = torch_to_numpy(torch_tensor, is_normalized_image=is_normalized_image)
+    img = Image.fromarray(im.astype(np.uint8)) 
+    img = img.save(f"{file_path}.png")
