@@ -17,18 +17,18 @@ import nerf_model
 import argparse
 
 def train_full_nerf(root_dir, base_dir, logger_name, steps, pos_enc, direc_enc, use_gpu,
-                    num_rays, coarse_samples, fine_samples, near, far, cropping, ckpt, args):
+                    num_rays, coarse_samples, fine_samples, near, far, prop, ckpt, args):
     """Train full NeRF model (coarse+fine network f(x,y,z,theta,rho)->rgb+sigma""" 
     wandb_logger = WandbLogger(name=logger_name, project="NeRF")
     wandb_logger.log_hyperparams(args)
     trainer = Trainer(gpus=int(use_gpu), default_root_dir=root_dir, max_steps=steps, 
                       resume_from_checkpoint=ckpt, logger=wandb_logger,
                       check_val_every_n_epoch=10, track_grad_norm=2)
-    train_dl = dataloader.getSyntheticDataloader(base_dir, 'train', num_rays, num_workers=2, shuffle=True)
+    train_dl = dataloader.getSyntheticDataloader(base_dir, 'train', num_rays, prop=prop, num_workers=2, shuffle=True)
     val_dl = dataloader.getSyntheticDataloader(base_dir, 'val', num_rays, num_workers=2, shuffle=False)
     model = nerf_model.NeRFNetwork(position_dim=pos_enc, direction_dim=direc_enc, 
                                    coarse_samples=coarse_samples, fine_samples=fine_samples,
-                                   near=near, far=far, cropping=cropping)
+                                   near=near, far=far)
     trainer.fit(model, train_dl, val_dl)
 
 def train_single_nerf(root_dir, base_dir, logger_name, steps, pos_enc, direc_enc, use_gpu, 
@@ -78,8 +78,7 @@ if __name__ == '__main__':
     full_parser.add_argument('-f', '--fine', type=int, default=128, help='number of fine samples')
     full_parser.add_argument('-nr', '--near', type=float, default=2.0, help='near bound for dataset')
     full_parser.add_argument('-fr', '--far', type=int, default=6.0, help='far bound of dataset')
-    full_parser.add_argument('-cr', '--cropping', type=int, default=1000, help='number of iterations to crop the image/region.')
-
+    full_parser.add_argument('-pr', '--prop', type=int, default=0.7, help='proportion of samples that have alpha > 0')
 
     single_parser.add_argument('-b', '--base_dir', type=str, default='./dev_data/', help='directory for dataset')
     single_parser.add_argument('-c', '--samples', type=int, default=128, help='number of samples')
@@ -92,7 +91,7 @@ if __name__ == '__main__':
     if args.type == 'full':
         train_full_nerf(args.root_dir, args.base_dir, args.name, args.steps, args.position_encoding, 
                         args.direction_encoding, args.gpu, args.rays, args.coarse, args.fine, args.near,
-                        args.far, args.cropping, args.ckpt, args)
+                        args.far, args.prop, args.ckpt, args)
     elif args.type == 'single': 
         train_single_nerf(args.root_dir, args.base_dir, args.name, args.steps, args.position_encoding,
                           args.direction_encoding, args.gpu, args.rays, args.samples, args.ckpt, args)

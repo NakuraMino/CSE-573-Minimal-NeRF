@@ -16,19 +16,38 @@ def image_to_tensor(image):
         tensor = torch.from_numpy(image).permute(2,0,1).float()
     return tensor
 
-def sample_random_coordinates(N, height, width): 
+def sample_random_coordinates(N, height, width, alpha=None, proportion=0.0): 
     """Two [N,] torch tensors representing random coordinates.
 
     Args:
         N: int representing number of coordinates to sample
         height: the maximum height value (exclusive)
         width: maximum width value (exclusive)
+        alpha: alpha channel of an image, used to weight coordinates to sample.
+               No weighting if None.
+        proportion: minimum proportion of coordinates that have to 
+                    have alpha values > 0.
     Returns:
         xs: [N,] torch tensor of random ints [0,width)
         ys: [N,] torch tensor of random ints [0,height)
     """
-    xs = torch.randint(0, width, size=(N,))
-    ys = torch.randint(0, height, size=(N,))
+    if alpha == None or proportion == 0:
+        xs = torch.randint(0, width, size=(N,))
+        ys = torch.randint(0, height, size=(N,))
+    else: 
+        num_in_alpha = int(N * proportion)
+        num_random = N - num_in_alpha
+        # pseudo science to pick an initial number of samples
+        num_samples = int(N * (1 / (1 - proportion)))
+        xs = torch.randint(0, width, size=(num_samples,))
+        ys = torch.randint(0, height, size=(num_samples,))
+        # keep the ones that have alpha > 0.
+        valid = alpha[ys, xs]
+        xs = xs[valid]; ys = ys[valid]
+        if xs.shape[0] > num_in_alpha:
+            xs = xs[:num_in_alpha]; ys = ys[:num_in_alpha]
+        xs = torch.cat((xs, torch.randint(0, width, size=(num_random,))))
+        ys = torch.cat((ys, torch.randint(0, height, size=(num_random,))))
     return xs, ys
 
 def get_rays(H, W, focal, c2w):
@@ -73,7 +92,7 @@ def convert_to_ndc_rays(o_rays, d_rays, focal, width, height, near=1.0):
 class SyntheticDataset(Dataset):
     """Dataset for Synthetic images."""
 
-    def __init__(self, base_dir, tvt, num_rays):
+    def __init__(self, base_dir, tvt, num_rays, prop):
         """Constructor.
 
         Args:
@@ -81,7 +100,7 @@ class SyntheticDataset(Dataset):
             tvt: str of either "train", "val", or "test".
             num_rays: number of rays to sample per batch / image.
         """ 
-        self._setup(base_dir, tvt, num_rays)
+        self._setup(base_dir, tvt, num_rays, prop)
         file = open(Path(self.base_dir, f'transforms_{tvt}.json'))
         self.data = json.load(file)
         self.frames = self.data['frames']
@@ -90,10 +109,11 @@ class SyntheticDataset(Dataset):
         self._preprocess()
         file.close()
 
-    def _setup(self, base_dir, tvt, num_rays): 
+    def _setup(self, base_dir, tvt, num_rays, prop): 
         # we know synthetic images are 800x800.
         self.H = 800
         self.W = 800
+        self.prop = prop
         self.tvt = tvt
         self.num_rays = num_rays
         self.base_dir = base_dir
@@ -110,11 +130,12 @@ class SyntheticDataset(Dataset):
     def __getitem__(self, idx):
         frame = self.frames[idx]
         # retrieve image 
-        xs, ys = sample_random_coordinates(self.num_rays, self.H, self.W) # (N,), (N,)
-        image = (torch.Tensor(imageio.imread(frame['file_path'], pilmode="RGB")) / 255.0).float()  # [HxWx3]
         cam_to_world = torch.Tensor(frame['transform_matrix']) 
         o_rays, d_rays = get_rays(self.H, self.W, self.focal, cam_to_world)  # [HxWx3]
-        rgb = image[ys,xs,:]
+        image = (torch.Tensor(imageio.imread(frame['file_path'], pilmode="RGBA")) / 255.0).float()  # [HxWx3]
+        xs, ys = sample_random_coordinates(self.num_rays, self.H, self.W, 
+                                           image[:,:,3].bool(), prop=self.prop) # (N,), (N,)
+        rgb = image[ys,xs,:3]
         origin = o_rays[ys, xs, :]
         direction = d_rays[ys, xs, :]
         del image, cam_to_world
@@ -124,7 +145,7 @@ class SyntheticDataset(Dataset):
             return {'origin': origin, 'direc': direction, 'rgb': rgb, 'xs': xs, 'ys': ys,
                     'all_origin': o_rays, 'all_direc': d_rays}
 
-def getSyntheticDataloader(base_dir, tvt, num_rays, num_workers=8, shuffle=True): 
+def getSyntheticDataloader(base_dir, tvt, num_rays, prop=0.0, num_workers=8, shuffle=True): 
     dataset = SyntheticDataset(base_dir, tvt, num_rays)
     return DataLoader(dataset=dataset, batch_size=1, shuffle=shuffle, num_workers=num_workers)
 
