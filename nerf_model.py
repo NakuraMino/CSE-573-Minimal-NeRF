@@ -150,12 +150,12 @@ class NeRFNetwork(LightningModule):
         loss = F.mse_loss(pred_rgbs, rgb)
         self.log('val_loss', loss, batch_size=N)
 
-        # if batch_idx == self.im_idx:
-        #     all_o_rays = val_batch['all_origin']
-        #     all_d_rays = val_batch['all_direc']
-        #     im = nerf_helpers.view_reconstruction(self, all_o_rays, all_d_rays, N=N)
-        #     self.logger.log_image(key='recon', images=[im], caption=[f'val/{self.im_idx}.png'])
-        #     del im
+        if batch_idx == self.im_idx:
+            all_o_rays = val_batch['all_origin']
+            all_d_rays = val_batch['all_direc']
+            im = nerf_helpers.view_reconstruction(self, all_o_rays, all_d_rays, N=N)
+            self.logger.log_image(key='recon', images=[im], caption=[f'val/{self.im_idx}.png'])
+            del im
         return loss
 
 
