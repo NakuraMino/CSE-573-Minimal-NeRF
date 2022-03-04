@@ -16,7 +16,7 @@ def image_to_tensor(image):
         tensor = torch.from_numpy(image).permute(2,0,1).float()
     return tensor
 
-def sample_random_coordinates(N, height, width, alpha=None, proportion=0.0): 
+def sample_random_coordinates(N, height, width, alpha=None, prop=0.0): 
     """Two [N,] torch tensors representing random coordinates.
 
     Args:
@@ -25,20 +25,20 @@ def sample_random_coordinates(N, height, width, alpha=None, proportion=0.0):
         width: maximum width value (exclusive)
         alpha: alpha channel of an image, used to weight coordinates to sample.
                No weighting if None.
-        proportion: minimum proportion of coordinates that have to 
+        prop: minimum proportion of coordinates that have to 
                     have alpha values > 0.
     Returns:
         xs: [N,] torch tensor of random ints [0,width)
         ys: [N,] torch tensor of random ints [0,height)
     """
-    if alpha == None or proportion == 0:
+    if alpha == None or prop == 0:
         xs = torch.randint(0, width, size=(N,))
         ys = torch.randint(0, height, size=(N,))
     else: 
-        num_in_alpha = int(N * proportion)
+        num_in_alpha = int(N * prop)
         num_random = N - num_in_alpha
         # pseudo science to pick an initial number of samples
-        num_samples = int(N * (1 / (1 - proportion)))
+        num_samples = int(N * (1 / (1 - prop)))
         xs = torch.randint(0, width, size=(num_samples,))
         ys = torch.randint(0, height, size=(num_samples,))
         # keep the ones that have alpha > 0.
