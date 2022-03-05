@@ -67,7 +67,6 @@ class SyntheticDataModule(LightningDataModule):
             return DataLoader(dataset=self.crop_train_ds, batch_size=1,
                               shuffle=True, num_workers=self.num_workers)
         else:
-            self.trainer.log("cropping", 0.0, batch_size=1)
             return DataLoader(dataset=self.train_ds, batch_size=1, shuffle=True,
                               num_workers=self.num_workers)
 
