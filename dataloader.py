@@ -118,9 +118,9 @@ class SyntheticDataset(Dataset):
         # retrieve image 
         cam_to_world = torch.Tensor(frame['transform_matrix']) 
         o_rays, d_rays = get_rays(self.H, self.W, self.focal, cam_to_world)  # [HxWx3]
-        image = (torch.Tensor(imageio.imread(frame['file_path'], pilmode="RGBA")) / 255.0).float()  # [HxWx3]
+        image = (torch.Tensor(imageio.imread(frame['file_path'], pilmode="RGB")) / 255.0).float()  # [HxWx3]
         xs, ys = sample_random_coordinates(self.num_rays, self.H, self.W, cropping=self.cropping) # (N,), (N,)
-        rgb = image[ys,xs,:3]
+        rgb = image[ys,xs,:]
         origin = o_rays[ys, xs, :]
         direction = d_rays[ys, xs, :]
         del image, cam_to_world
