@@ -4,7 +4,6 @@ sys.path.append("../")
 
 import unittest 
 import torch 
-import dataloader
 import nerf_helpers
 import torch.testing as testing
 import numpy as np
@@ -13,27 +12,34 @@ class DataloaderTest(unittest.TestCase):
 
     def setUp(self):
         pass
-    
-    def test_ndc_rays_direction(self):
-        origin = torch.Tensor([1,1,1]).view((1,1,-1))
-        direc = torch.Tensor([1,1,1]).view((1,1,-1))
-        _, d_new = dataloader.convert_to_ndc_rays(origin, direc, 1, 4, 4)
-        gt_d_new = torch.Tensor([0,0,2]).view((1,1,-1))
-        np.testing.assert_array_equal(d_new.numpy(), gt_d_new.numpy())        
 
-    def test_ndc_rays_unit_direction(self):
-        origin = torch.Tensor([1,1,1]).view((1,1,-1))
-        direc = torch.Tensor([1,1,1]).view((1,1,-1))
-        _, d_new = dataloader.convert_to_ndc_rays(origin, direc, 1, 4, 4)
-        d_norm = np.linalg.norm(d_new.numpy())
-        np.testing.assert_array_equal(d_norm, 1.0)        
+    def test_calculate_unnormalized_weights(self):
+        # (density: torch.Tensor, deltas: torch.Tensor)
+        deltas = torch.full((1,5,1), 0.2)
+        density = torch.Tensor([0,50,1,0.3,1]).view(deltas.shape)
+        weights = nerf_helpers.calculate_unnormalized_weights(density, deltas)
+        gt_weights = torch.Tensor([0, 0.9999546001, 8.229611e-6, 2.1646e-6, 6.34545e-6]).view(deltas.shape)
+        testing.assert_close(weights, gt_weights)
+        pass
 
-    def test_ndc_rays_origin(self):
-        origin = torch.Tensor([1,1,1]).view((1,1,-1))
-        direc = torch.Tensor([1,1,1]).view((1,1,-1))
-        o_new, _ = dataloader.convert_to_ndc_rays(origin, direc, 1, 4, 4)
-        gt_o_new = torch.Tensor([-0.5,-0.5,-1]).view((1,1,-1))
-        np.testing.assert_almost_equal(o_new.numpy(), gt_o_new.numpy())        
+    def test_estimate_ray_color(self):
+        # testing one ray with equal weights and equal colors
+        weights = torch.full((1, 256, 1), 1/256)
+        rgbs = torch.full((1, 256, 3), 1)
+        # pure white ray
+        ray_color = nerf_helpers.estimate_ray_color(weights, rgbs)
+        gt_ray_color = torch.ones((1,3))
+        testing.assert_close(ray_color, gt_ray_color)
+
+    def test_estimate_ray_color_one_weight(self):
+        # testing one ray with equal weights and equal colors
+        weights = torch.zeros((1, 256, 1))
+        weights[:, 200,:] = 1.0
+        rgbs = torch.full((1, 256, 3), 1)
+        # pure white ray
+        ray_color = nerf_helpers.estimate_ray_color(weights, rgbs)
+        gt_ray_color = torch.ones((1,3))
+        testing.assert_close(ray_color, gt_ray_color)
 
 if __name__ == '__main__':
     unittest.main(verbosity=2)

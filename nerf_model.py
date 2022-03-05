@@ -3,11 +3,14 @@ import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
 from pytorch_lightning import LightningModule
-from nerf_to_recon import photo_nerf_to_image, torch_to_numpy
 import nerf_helpers
 from PIL import Image
 import random
 from timeit import default_timer as timer
+
+
+ACT_FN = nn.LeakyReLU(0.1)  # nn.ReLU()
+
 
 def positional_encoding(x, dim=10):
     """project input to higher dimensional space as a positional encoding.
@@ -24,11 +27,6 @@ def positional_encoding(x, dim=10):
         positional_encoding.append(torch.sin(2**i * torch.pi * x))
     positional_encoding = torch.cat(positional_encoding, dim=-1)
     return positional_encoding
-
-
-class Square(nn.Module):
-    def forward(self, x):
-        return torch.square(x)
 
 
 class NeRFNetwork(LightningModule):
@@ -61,6 +59,7 @@ class NeRFNetwork(LightningModule):
         self.fine_network = NeRFModel(position_dim, direction_dim)
         self.im_idx = 0
         self.max_idx = 1
+        self.timer = timer()
 
     def forward(self, o_rays, d_rays):
         """Single forward pass on both coarse and fine network.
@@ -78,6 +77,8 @@ class NeRFNetwork(LightningModule):
         # calculating coarse
         coarse_samples, coarse_ts = nerf_helpers.generate_coarse_samples(o_rays, d_rays, self.coarse_samples, self.near, self.far)
         coarse_density, coarse_rgb =self.coarse_network(coarse_samples, d_rays)
+        self.log('coarse_density_norms', torch.linalg.norm(coarse_density), batch_size=1)
+        self.log('coarse_density_non_zeros', (coarse_density != 0).sum().float(), batch_size=1)
         coarse_deltas = nerf_helpers.generate_deltas(coarse_ts)
 
         weights = nerf_helpers.calculate_unnormalized_weights(coarse_density, coarse_deltas)
@@ -87,6 +88,8 @@ class NeRFNetwork(LightningModule):
         fine_samples = torch.cat([fine_samples, coarse_samples], axis=1)
         fine_ts = torch.cat([fine_ts, coarse_ts], axis=1)
         fine_density, fine_rgb = self.fine_network(fine_samples, d_rays)
+        self.log('fine_density_norms', torch.linalg.norm(fine_density), batch_size=1)
+        self.log('fine_density_non_zeros', (fine_density != 0).sum().float(), batch_size=1)
 
         # sort ts to be sequential (in order to calculate deltas correctly) and sort density and rgb to align.
         all_ts = torch.cat([coarse_ts, fine_ts], dim=1)
@@ -108,13 +111,12 @@ class NeRFNetwork(LightningModule):
         return optimizer
 
     def training_step(self, train_batch, batch_idx):
-        start = timer()
         nerf_helpers.fix_batchify(train_batch)
         # inputs
         o_rays = train_batch['origin'] 
         d_rays = train_batch['direc']
         rgb =  train_batch['rgb']
-        
+
         # forward pass
         pred_dict = self.forward(o_rays, d_rays)
         pred_rgb = pred_dict['pred_rgbs']
@@ -122,9 +124,9 @@ class NeRFNetwork(LightningModule):
         # loss
         N, _ = pred_rgb.shape
         loss = F.mse_loss(pred_rgb, rgb)
-        end = timer()
         self.log('train_loss', loss, batch_size=N)
-        self.log('train iteration speed', end - start, batch_size=N)
+        self.log('train iteration speed', timer() - self.timer, batch_size=N)
+        self.timer = timer()
         return loss
 
     def validation_step(self, val_batch, batch_idx):
@@ -151,16 +153,7 @@ class NeRFNetwork(LightningModule):
         if batch_idx == self.im_idx:
             all_o_rays = val_batch['all_origin']
             all_d_rays = val_batch['all_direc']
-            H, W, C = all_o_rays.shape
-            all_o_rays = all_o_rays.view((H*W, C))
-            all_d_rays = all_d_rays.view((H*W, C))
-            im = []
-            for i in range(0, H*W, N): 
-                recon_preds = self.forward(all_o_rays[i:min(H*W,i+N),:], all_d_rays[i:min(H*W,i+N),:])
-                im.append(recon_preds['pred_rgbs'])
-
-            im = torch.cat(im, dim=0).view((H,W, C))
-            im = torch_to_numpy(im, is_normalized_image=True)
+            im = nerf_helpers.view_reconstruction(self, all_o_rays, all_d_rays, N=N)
             self.logger.log_image(key='recon', images=[im], caption=[f'val/{self.im_idx}.png'])
             del im
         return loss
@@ -259,15 +252,7 @@ class SingleNeRF(LightningModule):
 
         all_o_rays = val_batch['all_origin']
         all_d_rays = val_batch['all_direc']
-        H, W, C = all_o_rays.shape
-        all_o_rays = all_o_rays.view((H*W, C))
-        all_d_rays = all_d_rays.view((H*W, C))
-        im = []
-        for i in range(0, H*W, N): 
-            recon_preds = self.forward(all_o_rays[i:min(H*W,i+N),:], all_d_rays[i:min(H*W,i+N),:])
-            im.append(recon_preds['pred_rgbs'])
-        im = torch.cat(im, dim=0).view((H,W, C))
-        im = torch_to_numpy(im, is_normalized_image=True)
+        im = nerf_helpers.view_reconstruction(self, all_o_rays, all_d_rays, N=N)
         self.logger.log_image(key='recon', images=[im], caption=[f'val/0.png'])
         del im
         return loss
@@ -296,34 +281,34 @@ class NeRFModel(nn.Module):
         self.position_dim = position_dim
         self.direction_dim = direction_dim
         # first MLP is a simple multi-layer perceptron 
+        self.idx = 0
         self.mlp = nn.Sequential(
             nn.Linear(self.position_dim*2*3, 256),
-            nn.ReLU(),
+            ACT_FN,
             nn.Linear(256, 256),
-            nn.ReLU(),
+            ACT_FN,
             nn.Linear(256, 256),
-            nn.ReLU(),
+            ACT_FN,
             nn.Linear(256, 256),
-            nn.ReLU()
+            ACT_FN
         )
 
         self.feature_fn = nn.Sequential(
             nn.Linear(256 + self.position_dim*2*3, 256),
-            nn.ReLU(),
+            ACT_FN,
             nn.Linear(256, 256),
-            nn.ReLU(),
+            ACT_FN,
             nn.Linear(256, 256),
-            nn.ReLU(),
         )
 
         self.density_fn = nn.Sequential(
             nn.Linear(256, 1),
-            Square()  # rectified to ensure nonnegative density
+            nn.ReLU() # rectified to ensure nonnegative density
         )
 
         self.rgb_fn = nn.Sequential(
             nn.Linear(256 + self.direction_dim*2*3, 128),
-            nn.ReLU(),
+            ACT_FN,
             nn.Linear(128, 3),
             nn.Sigmoid()
         )
@@ -430,8 +415,8 @@ class ImageNeRFModel(LightningModule):
         learning or not.
         """
         im_h, im_w = val_batch
-        im = photo_nerf_to_image(self, im_h, im_w)
-        im = torch_to_numpy(im, is_normalized_image=True)
+        im = nerf_helpers.photo_nerf_to_image(self, im_h, im_w)
+        im = nerf_helpers.torch_to_numpy(im, is_normalized_image=True)
         im = Image.fromarray(im.astype(np.uint8))
         self.logger.log_image(key='recon', images=[im])
         return 0
