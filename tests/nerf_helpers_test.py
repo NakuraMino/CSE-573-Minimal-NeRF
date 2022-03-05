@@ -41,5 +41,11 @@ class DataloaderTest(unittest.TestCase):
         gt_ray_color = torch.ones((1,3))
         testing.assert_close(ray_color, gt_ray_color)
 
+    def test_generate_deltas(self):
+        ts = torch.arange(2, 6, 1).view((1,-1,1))
+        gt_deltas = torch.ones((1,4,1))
+        deltas = nerf_helpers.generate_deltas(ts, far=6.0)
+        testing.assert_close(deltas, gt_deltas)
+
 if __name__ == '__main__':
     unittest.main(verbosity=2)
