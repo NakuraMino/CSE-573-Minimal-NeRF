@@ -73,7 +73,6 @@ class SyntheticDataModule(LightningDataModule):
     def val_dataloader(self): 
         return DataLoader(dataset=self.val_ds, batch_size=1,
                           shuffle=False, num_workers=self.num_workers)
-        
 
 class SyntheticDataset(Dataset):
     """Dataset for Synthetic images."""
