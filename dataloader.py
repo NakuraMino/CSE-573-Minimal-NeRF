@@ -63,7 +63,7 @@ class SyntheticDataModule(LightningDataModule):
                                         cropping=False)
         
     def train_dataloader(self):
-        if self.trainer.current_epoch <= self.cropping_epochs:
+        if self.trainer.current_epoch < self.cropping_epochs:
             return DataLoader(dataset=self.crop_train_ds, batch_size=1,
                               shuffle=True, num_workers=self.num_workers)
         else:
