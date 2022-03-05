@@ -72,7 +72,8 @@ def calculate_unnormalized_weights(density: torch.Tensor, deltas: torch.Tensor):
     """
     N, s, _ = density.shape
     neg_delta_density = - 1 * density * deltas
-    shifted_neg_delta_density = torch.cat((torch.zeros(N,1,1), neg_delta_density[:,:-1,:]), axis=1)
+    shifted_neg_delta_density = torch.cat((torch.zeros((N,1,1), device=device), 
+                                          neg_delta_density[:,:-1,:]), axis=1)
     transmittance =  torch.exp(torch.cumsum(shifted_neg_delta_density, dim=1))
     weights = (1 - torch.exp(neg_delta_density)) * transmittance
     del transmittance
