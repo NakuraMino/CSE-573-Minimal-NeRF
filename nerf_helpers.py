@@ -1,6 +1,9 @@
 import torch
 import numpy as np
 import itertools
+from PIL import Image
+import dataloader
+import imageio
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
@@ -142,6 +145,20 @@ def inverse_transform_sampling(o_rays: torch.Tensor, d_rays: torch.Tensor, weigh
 View / Image reconstruction utilities
 """""""""""""""
 
+
+
+def generate_360_view_synthesis(model, height=800, width=800, near=2.0,
+                                far=6.0, cam_angle_x=0.6911112070083618, N=4096):
+    radius = far - near
+    poses = [pose_spherical(angle, -30, radius) for angle in np.linspace(-180,180,40+1)[:-1]]
+    focal = 0.5 * width / np.tan(0.5 * cam_angle_x)
+    views = []
+    for pose in poses:
+        o_rays, d_rays = dataloader.get_rays(height, width, focal, pose)
+        im = view_reconstruction(model, o_rays, d_rays, N=N)
+        views.append(im)
+    imageio.mimsave('./recons/360.gif', views)
+
 def view_reconstruction(model, all_o_rays, all_d_rays, N=4096):
     """Queries the model at every ray direction to generate an image from a view.
     
@@ -215,3 +232,36 @@ def save_torch_as_image(torch_tensor, file_path, is_normalized_image=False):
     im = torch_to_numpy(torch_tensor, is_normalized_image=is_normalized_image)
     img = Image.fromarray(im.astype(np.uint8)) 
     img = img.save(f"{file_path}.png")
+
+
+"""""""""""""""
+Code from original NeRF repository
+"""""""""""""""
+
+trans_t = lambda t : torch.Tensor([
+    [1,0,0,0],
+    [0,1,0,0],
+    [0,0,1,t],
+    [0,0,0,1],
+], dtype=torch.float32)
+
+rot_phi = lambda phi : torch.convert_to_tensor([
+    [1,0,0,0],
+    [0,torch.cos(phi),-torch.sin(phi),0],
+    [0,torch.sin(phi), torch.cos(phi),0],
+    [0,0,0,1],
+], dtype=torch.float32)
+
+rot_theta = lambda th : torch.Tensor([
+    [torch.cos(th),0,-torch.sin(th),0],
+    [0,1,0,0],
+    [torch.sin(th),0, torch.cos(th),0],
+    [0,0,0,1],
+], dtype=torch.float32)
+
+def pose_spherical(theta, phi, radius):
+    c2w = trans_t(radius)
+    c2w = rot_phi(phi/180.*np.pi) @ c2w
+    c2w = rot_theta(theta/180.*np.pi) @ c2w
+    c2w = np.array([[-1,0,0,0],[0,0,1,0],[0,1,0,0],[0,0,0,1]]) @ c2w
+    return c2w
