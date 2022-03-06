@@ -107,8 +107,13 @@ class NeRFNetwork(LightningModule):
                 'all_samples': all_samples, 'all_deltas': all_deltas}
 
     def configure_optimizers(self):
+        # num epochs = 5000 (i.e. 500,000 iterations and each epoch contains 100 training examples)
+        # 5e-5 = 5e-4 * gamma^5000
+        # 0.1 = gamma^5000
+        # gamma = 0.999539589
         optimizer = torch.optim.Adam(self.parameters(), lr=5e-4)
-        return optimizer
+        lr_decay_optimizer = torch.optim.lr_scheduler.ExponentialLR(optimizer=optimizer, gamma=0.999539589)
+        return lr_decay_optimizer
 
     def training_step(self, train_batch, batch_idx):
         nerf_helpers.fix_batchify(train_batch)
