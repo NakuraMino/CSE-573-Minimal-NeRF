@@ -180,7 +180,7 @@ def view_reconstruction(model, all_o_rays, all_d_rays, N=4096):
     im = np.concatenate(im, axis=0).reshape((H, W, C))
     im *= 255
     im = np.clip(im, 0, 255)
-    return im
+    return im.astype(np.uint8)
 
 def photo_nerf_to_image(model, im_h, im_w): 
     """Queries the model at every idx to generate an image 
