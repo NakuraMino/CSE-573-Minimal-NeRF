@@ -5,6 +5,7 @@ from PIL import Image
 import dataloader
 import imageio
 from tqdm import tqdm
+from pathlib import Path
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
@@ -146,9 +147,9 @@ def inverse_transform_sampling(o_rays: torch.Tensor, d_rays: torch.Tensor, weigh
 View / Image reconstruction utilities
 """""""""""""""
 
-def generate_360_view_synthesis(model, save_path, height=800, width=800, near=2.0,
-                                far=6.0, cam_angle_x=0.6911112070083618, N=4096):
-    radius = far - near
+def generate_360_view_synthesis(model, save_dir: Path, height=800, width=800, radius=4.0,
+                                cam_angle_x=0.6911112070083618, N=4096):
+    assert save_dir.exists() and save_dir.is_dir()
     poses = [pose_spherical(angle, -30, radius) for angle in np.linspace(-180,180,40+1)[:-1]]
     focal = 0.5 * width / np.tan(0.5 * cam_angle_x)
     views = []
@@ -157,7 +158,7 @@ def generate_360_view_synthesis(model, save_path, height=800, width=800, near=2.
         im = view_reconstruction(model, o_rays.to(device), d_rays.to(device), N=N)
         views.append(im)
         del o_rays, d_rays, im
-    imageio.mimwrite(save_path, views)
+    imageio.mimwrite(Path(save_dir, '360.gif'), views)
 
 def view_reconstruction(model, all_o_rays, all_d_rays, N=4096):
     """Queries the model at every ray direction to generate an image from a view.
