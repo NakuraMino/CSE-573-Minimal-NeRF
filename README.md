@@ -1,6 +1,6 @@
 # CSEP573-NeRF
 
-This is a semi-faithful pytorch-lightning implementation of Neural Radiance Fields (NeRF) from [NeRF: Representing Scenes as Neural Radiance for View Synthesis](https://arxiv.org/abs/2003.08934). We implement the whole repository from scratch with minimal guidance from the [original repository](https://github.com/bmild/nerf). In fact, we only borrow minimal code to generate ray directions, origins, and 360 degree views and build the remaining training pipeline and models from scratch.
+This is a semi-faithful pytorch-lightning implementation of Neural Radiance Fields (NeRF) from [NeRF: Representing Scenes as Neural Radiance for View Synthesis](https://arxiv.org/abs/2003.08934). We implement the whole repository from scratch with minimal guidance from the [original repository](https://github.com/bmild/nerf). In fact, we only borrow minimal code to generate rays and 360 degree views. We built the remaining training pipeline and models from scratch.
 
 ### Installation
 
