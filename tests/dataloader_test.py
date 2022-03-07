@@ -44,7 +44,7 @@ class DataloaderTest(unittest.TestCase):
         batch = next(iter(self.sdl))
         self.assertTrue('origin' in batch)
         self.assertTrue('direc' in batch)
-        self.assertTrue('rgba' in batch)
+        self.assertTrue('rgb' in batch)
         
     # I was going to test my rays but ummm, its kind of hard
     # def test_synthetic_get_ray(self):
