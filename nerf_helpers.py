@@ -158,7 +158,7 @@ def generate_360_view_synthesis(model, save_dir: Path, epoch, height=800, width=
         im = view_reconstruction(model, o_rays.to(device), d_rays.to(device), N=N)
         views.append(im)
         del o_rays, d_rays, im
-    imageio.mimwrite(Path(save_dir, f'epoch={epoch}-360.gif'), views)
+    imageio.mimwrite(Path(save_dir, f'{epoch}-360.gif'), views)
 
 def view_reconstruction(model, all_o_rays, all_d_rays, N=4096):
     """Queries the model at every ray direction to generate an image from a view.
