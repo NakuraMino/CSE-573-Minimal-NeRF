@@ -113,8 +113,9 @@ class NeRFNetwork(LightningModule):
         num_epochs = 5000
         gamma = (end_lr / start_lr) ** (1/num_epochs)
         optimizer = torch.optim.Adam(self.parameters(), lr=start_lr)
+        # https://github.com/PyTorchLightning/pytorch-lightning/issues/960
         lr_decay_optimizer = torch.optim.lr_scheduler.ExponentialLR(optimizer=optimizer, gamma=gamma)
-        return lr_decay_optimizer
+        return {'optimizer': optimizer, 'lr_scheduler': lr_decay_optimizer}
 
     def training_step(self, train_batch, batch_idx):
         nerf_helpers.fix_batchify(train_batch)
