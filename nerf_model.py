@@ -160,12 +160,19 @@ class NeRFNetwork(LightningModule):
         
         # forward pass
         pred_dict = self.forward(o_rays, d_rays)
-        pred_rgbs = pred_dict['pred_rgbs']
+        fine_rgb = pred_dict['fine_rgb_rays']
+        coarse_rgb = pred_dict['coarse_rgb_rays']
         
         # loss
-        N, _ = pred_rgbs.shape
-        loss = F.mse_loss(pred_rgbs, rgb)
+        N, _ = fine_rgb.shape
+        coarse_loss = F.mse_loss(coarse_rgb, rgb)
+        fine_loss = F.mse_loss(fine_rgb, rgb)
+        loss = coarse_loss + fine_loss
+
+        # logging
         self.log('val_loss', loss, batch_size=N)
+        self.log('val_fine_loss', fine_loss, batch_size=N)
+        self.log('val_coarse_loss', coarse_loss, batch_size=N)
 
         if batch_idx == self.im_idx:
             all_o_rays = val_batch['all_origin']

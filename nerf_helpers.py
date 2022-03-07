@@ -177,7 +177,7 @@ def view_reconstruction(model, all_o_rays, all_d_rays, N=4096):
     im = []
     for i in range(0, H*W, N): 
         recon_preds = model.forward(all_o_rays[i:min(H*W,i+N),:], all_d_rays[i:min(H*W,i+N),:])
-        im.append(recon_preds['pred_rgbs'].cpu().clone().detach().numpy())
+        im.append(recon_preds['fine_rgb_rays'].cpu().clone().detach().numpy())
     im = np.concatenate(im, axis=0).reshape((H, W, C))
     im *= 255
     im = np.clip(im, 0, 255)
