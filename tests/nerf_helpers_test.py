@@ -47,5 +47,21 @@ class DataloaderTest(unittest.TestCase):
         deltas = nerf_helpers.generate_deltas(ts, far=6.0)
         testing.assert_close(deltas, gt_deltas)
 
+    def test_generate_random_samples(self):
+        o_rays = torch.Tensor([[0.0,0.0,0.0]])
+        d_rays = torch.Tensor([[1.0,1.0,1.0]])
+        num_samples = 2
+        samples, ts = nerf_helpers.generate_coarse_samples(o_rays, d_rays, num_samples)
+        ts_bounds = torch.Tensor([[2.0, 4.0, 6.0]]).T
+        lower_ts_bd = ts_bounds[None, :-1,:]
+        upper_ts_bd = ts_bounds[None, 1:,:]
+        ts_within_bounds = torch.logical_and(lower_ts_bd < ts, ts < upper_ts_bd)
+        self.assertTrue(ts_within_bounds.all())
+        sample_bounds = torch.Tensor([[2.0, 2.0, 2.0], [4.0, 4.0, 4.0], [6.0,6.0,6.0]])
+        lower_sample_bd = sample_bounds[:-1,:]
+        upper_sample_bd = sample_bounds[1:,:]
+        sample_within_bounds = torch.logical_and(lower_sample_bd < samples, samples < upper_sample_bd)
+        self.assertTrue(sample_within_bounds.all())
+
 if __name__ == '__main__':
     unittest.main(verbosity=2)
