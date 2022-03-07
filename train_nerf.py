@@ -73,7 +73,7 @@ if __name__ == '__main__':
     full_parser = subparsers.add_parser("full")
     single_parser = subparsers.add_parser("single")
 
-    full_parser.add_argument('-b', '--base_dir', type=str, default='/home/nakuram/CSEP573-NeRF/data/nerf_synthetic/lego/', help='directory for dataset')
+    full_parser.add_argument('-b', '--base_dir', type=str, default='./data/nerf_synthetic/lego/', help='directory for dataset')
     full_parser.add_argument('-c', '--coarse', type=int, default=64, help='number of coarse samples')
     full_parser.add_argument('-f', '--fine', type=int, default=128, help='number of fine samples')
     full_parser.add_argument('-nr', '--near', type=float, default=2.0, help='near bound for dataset')
