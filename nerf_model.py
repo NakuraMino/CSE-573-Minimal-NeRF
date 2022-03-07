@@ -104,10 +104,9 @@ class NeRFNetwork(LightningModule):
         fine_weights = nerf_helpers.calculate_unnormalized_weights(fine_density, fine_deltas)
         fine_rgb_ray = nerf_helpers.estimate_ray_color(fine_weights, fine_rgb)
         
-        # old keys: ['pred_rgbs', 'all_rgb', 'all_density', 'all_ts', 'all_samples', 'all_deltas']
-        # return {'fine_rgb_rays': fine_rgb_ray, 'coarse_rgb_rays': coarse_rgb_ray}
-        return {'fine_rgb_rays': fine_rgb_ray, 'coarse_rgb_rays': coarse_rgb_ray, 'coarse_ts': coarse_ts, 'fine_ts': fine_ts,
-                'coarse_deltas': coarse_deltas, 'fine_deltas': fine_deltas, 'coarse_density': coarse_density, 'fine_density': fine_density}
+        return {'fine_rgb_rays': fine_rgb_ray, 'coarse_rgb_rays': coarse_rgb_ray}
+        # return {'fine_rgb_rays': fine_rgb_ray, 'coarse_rgb_rays': coarse_rgb_ray, 'coarse_ts': coarse_ts, 'fine_ts': fine_ts,
+                # 'coarse_deltas': coarse_deltas, 'fine_deltas': fine_deltas, 'coarse_density': coarse_density, 'fine_density': fine_density}
         
 
     def configure_optimizers(self):
