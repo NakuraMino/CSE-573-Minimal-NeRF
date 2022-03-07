@@ -74,37 +74,41 @@ class NeRFNetwork(LightningModule):
                 'all_density': [N x coarse*2+fine_samples x 1] density predictions.
                 'all_ts': [N x coarse*2+fine_samples x 1] time values along a ray direction.
         """
-        # calculating coarse
+        # calculating coarse network.
         coarse_samples, coarse_ts = nerf_helpers.generate_coarse_samples(o_rays, d_rays, self.coarse_samples, self.near, self.far)
         coarse_density, coarse_rgb =self.coarse_network(coarse_samples, d_rays)
         self.log('coarse_density_norms', torch.linalg.norm(coarse_density), batch_size=1)
         self.log('coarse_density_non_zeros', (coarse_density != 0).sum().float(), batch_size=1)
-        coarse_deltas = nerf_helpers.generate_deltas(coarse_ts)
 
-        weights = nerf_helpers.calculate_unnormalized_weights(coarse_density, coarse_deltas)
-        fine_samples, fine_ts = nerf_helpers.inverse_transform_sampling(o_rays, d_rays, weights, 
+        # calculate coarse ray color.        
+        coarse_deltas = nerf_helpers.generate_deltas(coarse_ts)
+        coarse_weights = nerf_helpers.calculate_unnormalized_weights(coarse_density, coarse_deltas)
+        coarse_rgb_ray = nerf_helpers.estimate_ray_color(coarse_weights, coarse_rgb)
+
+        # sample points for fine samples.
+        fine_samples, fine_ts = nerf_helpers.inverse_transform_sampling(o_rays, d_rays, coarse_weights, 
                                                                         coarse_ts, self.fine_samples)
-        # fine_deltas = nerf_helpers.generate(fine_ts)
         fine_samples = torch.cat([fine_samples, coarse_samples], axis=1)
         fine_ts = torch.cat([fine_ts, coarse_ts], axis=1)
+        fine_ts, idxs = torch.sort(fine_ts, dim=1)
+        idxs = torch.broadcast_to(idxs, fine_samples.shape)
+        fine_samples = torch.gather(fine_samples, 1, idxs)
+
+        # calculating fine network.
         fine_density, fine_rgb = self.fine_network(fine_samples, d_rays)
         self.log('fine_density_norms', torch.linalg.norm(fine_density), batch_size=1)
         self.log('fine_density_non_zeros', (fine_density != 0).sum().float(), batch_size=1)
 
-        # sort ts to be sequential (in order to calculate deltas correctly) and sort density and rgb to align.
-        all_ts = torch.cat([coarse_ts, fine_ts], dim=1)
-        all_ts, idxs = torch.sort(all_ts, dim=1)
-        all_density = torch.gather(torch.cat([coarse_density, fine_density], dim=1), 1, idxs)
-        idxs = torch.broadcast_to(idxs, list(all_density.shape[:-1]) + [3])
-        all_rgb = torch.gather(torch.cat([coarse_rgb, fine_rgb], dim=1), 1, idxs)
-        all_samples = torch.gather(torch.cat([coarse_samples, fine_samples], dim=1), 1, idxs)
-
-        # calculate ray color.
-        all_deltas = nerf_helpers.generate_deltas(all_ts)
-        all_weights = nerf_helpers.calculate_unnormalized_weights(all_density, all_deltas)
-        pred_rgbs = nerf_helpers.estimate_ray_color(all_weights, all_rgb)
-        return {'pred_rgbs': pred_rgbs, 'all_rgb': all_rgb, 'all_density': all_density, 'all_ts': all_ts, 
-                'all_samples': all_samples, 'all_deltas': all_deltas}
+        # calculate fine ray color.
+        fine_deltas = nerf_helpers.generate_deltas(fine_ts)
+        fine_weights = nerf_helpers.calculate_unnormalized_weights(fine_density, fine_deltas)
+        fine_rgb_ray = nerf_helpers.estimate_ray_color(fine_weights, fine_rgb)
+        
+        # old keys: ['pred_rgbs', 'all_rgb', 'all_density', 'all_ts', 'all_samples', 'all_deltas']
+        # return {'fine_rgb_rays': fine_rgb_ray, 'coarse_rgb_rays': coarse_rgb_ray}
+        return {'fine_rgb_rays': fine_rgb_ray, 'coarse_rgb_rays': coarse_rgb_ray, 'coarse_ts': coarse_ts, 'fine_ts': fine_ts,
+                'coarse_deltas': coarse_deltas, 'fine_deltas': fine_deltas, 'coarse_density': coarse_density, 'fine_density': fine_density}
+        
 
     def configure_optimizers(self):
         # end_lr = start_lr * gamma^epochs
@@ -126,12 +130,19 @@ class NeRFNetwork(LightningModule):
 
         # forward pass
         pred_dict = self.forward(o_rays, d_rays)
-        pred_rgb = pred_dict['pred_rgbs']
+        fine_rgb = pred_dict['fine_rgb_rays']
+        coarse_rgb = pred_dict['coarse_rgb_rays']
         
         # loss
-        N, _ = pred_rgb.shape
-        loss = F.mse_loss(pred_rgb, rgb)
+        N, _ = fine_rgb.shape
+        coarse_loss = F.mse_loss(coarse_rgb, rgb)
+        fine_loss = F.mse_loss(fine_rgb, rgb)
+        loss = coarse_loss + fine_loss
+
+        # logging
         self.log('train_loss', loss, batch_size=N)
+        self.log('train_fine_loss', fine_loss, batch_size=N)
+        self.log('train_coarse_loss', coarse_loss, batch_size=N)
         self.log('train iteration speed', timer() - self.timer, batch_size=N)
         self.timer = timer()
         return loss
