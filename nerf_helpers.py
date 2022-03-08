@@ -135,7 +135,7 @@ def inverse_transform_sampling(o_rays: torch.Tensor, d_rays: torch.Tensor, weigh
     idxs[idxs >= C] = C - 1
     bins = torch.gather(ts, 1, idxs)
     
-    fine_ts = bins + torch.rand((N, num_samples, 1), device=device) / num_samples
+    fine_ts = bins + torch.rand((N, num_samples, 1), device=device) / C # num_samples
     fine_samples = o_rays + fine_ts * d_rays
     return fine_samples, fine_ts
 
