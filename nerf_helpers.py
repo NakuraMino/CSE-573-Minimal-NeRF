@@ -94,7 +94,8 @@ def estimate_ray_color(weights, rgb):
     ray_color = torch.sum(weights * rgb, dim=1)
     return ray_color
 
-def inverse_transform_sampling(o_rays: torch.Tensor, d_rays: torch.Tensor, weights, ts, num_samples):
+def inverse_transform_sampling(o_rays: torch.Tensor, d_rays: torch.Tensor, weights, ts,
+                               num_samples, near=2.0, far=6.0):
     """Performs inverse transform sampling according to the weights.
 
     Samples from ts according to the weights (i.e. ts with higher weights are 
@@ -113,6 +114,7 @@ def inverse_transform_sampling(o_rays: torch.Tensor, d_rays: torch.Tensor, weigh
         ts: [N x C x 1] is the increment between each sample. N is the batch 
             size, and C is the number of coarse samples. 
         num_samples: number of samples to return per ray.
+        near/far: near/far bounds for sampling. 
     Returns:
         fine_samples: [N x num_samples x 3] tensor sampled according to weights.
                       Instead of using the same values as in ts, we pertube it by 
@@ -131,11 +133,17 @@ def inverse_transform_sampling(o_rays: torch.Tensor, d_rays: torch.Tensor, weigh
     samples = samples + eps
 
     cdf = torch.squeeze(cdf, -1)  # make dimensions match, [N x C]
-    idxs = torch.searchsorted(cdf, samples).unsqueeze(-1)  # [N x C x 1]
-    idxs[idxs >= C] = C - 1
-    bins = torch.gather(ts, 1, idxs)
+    lower_idxs = torch.searchsorted(cdf, samples).unsqueeze(-1)  # [N x C x 1]
+    upper_idxs = lower_idxs + 1
     
-    fine_ts = bins + torch.rand((N, num_samples, 1), device=device) / C # num_samples
+    lower = torch.full((N,1,1), near)
+    upper = torch.full((N,1,1), far)
+    ts_bounds = torch.cat([lower, ts, upper], dim=1)
+    
+    lower_bins = torch.gather(ts_bounds, 1, lower_idxs)
+    upper_bins = torch.gather(ts_bounds, 1, upper_idxs)
+    
+    fine_ts = lower_bins + (upper_bins - lower_bins) * torch.rand((N,num_samples,1), device=device)
     fine_samples = o_rays + fine_ts * d_rays
     return fine_samples, fine_ts
 
