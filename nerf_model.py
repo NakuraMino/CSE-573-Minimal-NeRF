@@ -9,7 +9,7 @@ import random
 from timeit import default_timer as timer
 
 
-ACT_FN = nn.LeakyReLU(0.1)  # nn.ReLU()
+ACT_FN = nn.ReLU()  # nn.LeakyReLU(0.1)
 
 
 def positional_encoding(x, dim=10):
