@@ -122,12 +122,12 @@ class SyntheticDataset(Dataset):
         rgb = image[ys,xs,:]
         origin = o_rays[ys, xs, :]
         direction = d_rays[ys, xs, :]
-        del image, cam_to_world
+        del cam_to_world
         if self.tvt == 'train':
             return {'origin': origin, 'direc': direction, 'rgb': rgb, 'xs': xs, 'ys': ys}
         else: 
             return {'origin': origin, 'direc': direction, 'rgb': rgb, 'xs': xs, 'ys': ys,
-                    'all_origin': o_rays, 'all_direc': d_rays}
+                    'all_origin': o_rays, 'all_direc': d_rays, 'image': image}
 
 def getSyntheticDataloader(base_dir, tvt, num_rays, cropping=False, num_workers=8, shuffle=True): 
     dataset = SyntheticDataset(base_dir, tvt, num_rays, cropping=cropping)

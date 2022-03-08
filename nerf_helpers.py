@@ -47,7 +47,6 @@ def generate_coarse_samples(o_rays: torch.Tensor, d_rays: torch.Tensor,
     ts = ts + rand
     ts = ts.unsqueeze(-1)
     samples = d_rays * ts + o_rays
-    del rand
     return samples, ts
 
 def generate_deltas(ts: torch.Tensor, far=6.0):
@@ -62,7 +61,6 @@ def generate_deltas(ts: torch.Tensor, far=6.0):
     N, _, _ = ts.shape
     upper_bound = torch.cat([ts[:,1:,:], torch.full((N, 1, 1), far, device=device)], dim=1)
     deltas = upper_bound - ts
-    del upper_bound
     return deltas
 
 def calculate_unnormalized_weights(density: torch.Tensor, deltas: torch.Tensor):
@@ -81,7 +79,6 @@ def calculate_unnormalized_weights(density: torch.Tensor, deltas: torch.Tensor):
                                           neg_delta_density[:,:-1,:]), axis=1)
     transmittance =  torch.exp(torch.cumsum(shifted_neg_delta_density, dim=1))
     weights = (1 - torch.exp(neg_delta_density)) * transmittance
-    del transmittance
     return weights
 
 def estimate_ray_color(weights, rgb):
@@ -125,7 +122,7 @@ def inverse_transform_sampling(o_rays: torch.Tensor, d_rays: torch.Tensor, weigh
     N, C, _ = ts.shape
     o_rays = o_rays.unsqueeze(1)
     d_rays = d_rays.unsqueeze(1)
-    
+
     cdf = torch.cumsum(weights, axis=1)  # [N x C x 1]
     cdf = cdf / cdf[:, -1, None]
     eps = torch.rand((N, 1), device=device) / num_samples  # low variance sampling
@@ -140,7 +137,6 @@ def inverse_transform_sampling(o_rays: torch.Tensor, d_rays: torch.Tensor, weigh
     
     fine_ts = bins + torch.rand((N, num_samples, 1), device=device) / num_samples
     fine_samples = o_rays + fine_ts * d_rays
-    del cdf, idxs, bins, samples, eps
     return fine_samples, fine_ts
 
 """""""""""""""
@@ -177,7 +173,7 @@ def view_reconstruction(model, all_o_rays, all_d_rays, N=4096):
     im = []
     for i in range(0, H*W, N): 
         recon_preds = model.forward(all_o_rays[i:min(H*W,i+N),:], all_d_rays[i:min(H*W,i+N),:])
-        im.append(recon_preds['pred_rgbs'].cpu().clone().detach().numpy())
+        im.append(recon_preds['fine_rgb_rays'].cpu().clone().detach().numpy())
     im = np.concatenate(im, axis=0).reshape((H, W, C))
     im *= 255
     im = np.clip(im, 0, 255)
