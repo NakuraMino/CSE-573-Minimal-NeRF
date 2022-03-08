@@ -136,8 +136,8 @@ def inverse_transform_sampling(o_rays: torch.Tensor, d_rays: torch.Tensor, weigh
     lower_idxs = torch.searchsorted(cdf, samples).unsqueeze(-1)  # [N x C x 1]
     upper_idxs = lower_idxs + 1
     
-    lower = torch.full((N,1,1), near)
-    upper = torch.full((N,1,1), far)
+    lower = torch.full((N,1,1), near, device=device)
+    upper = torch.full((N,1,1), far, device=device)
     ts_bounds = torch.cat([lower, ts, upper], dim=1)
     
     lower_bins = torch.gather(ts_bounds, 1, lower_idxs)
