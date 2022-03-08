@@ -145,6 +145,18 @@ View / Image reconstruction utilities
 
 def generate_360_view_synthesis(model, save_dir: Path, epoch, height=800, width=800,
                                 radius=4.0, cam_angle_x=0.6911112070083618, N=4096):
+    """Generates a 360 view of a NeRF model.
+
+    Saves a 360 degree view of the NeRF model at SAVE_DIR/EPOCH-360.gif
+    
+    Args:
+        model: a nerf_model.NeRFNetwork object
+        save_dir: path to a save directory.
+        epoch: the ckpt epoch, used in naming the resulting gif.
+        height/width: height of the images that NeRF was trained on.
+        radius: The 360 view from a radius.
+        cam_angle_x: x-axis field of view in angles.
+    """
     assert save_dir.exists() and save_dir.is_dir()
     poses = [pose_spherical(angle, -30, radius) for angle in np.linspace(-180,180,40+1)[:-1]]
     focal = 0.5 * width / np.tan(0.5 * cam_angle_x)
