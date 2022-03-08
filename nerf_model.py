@@ -105,10 +105,10 @@ class NeRFNetwork(LightningModule):
         fine_rgb_ray = nerf_helpers.estimate_ray_color(fine_weights, fine_rgb)
         
         return {'fine_rgb_rays': fine_rgb_ray, 'coarse_rgb_rays': coarse_rgb_ray}
-        # return {'fine_rgb_rays': fine_rgb_ray, 'coarse_rgb_rays': coarse_rgb_ray, 'coarse_ts': coarse_ts, 'fine_ts': fine_ts,
-                # 'coarse_deltas': coarse_deltas, 'fine_deltas': fine_deltas, 'coarse_density': coarse_density, 'fine_density': fine_density}
+        # return {'fine_rgb_rays': fine_rgb_ray, 'coarse_rgb_rays': coarse_rgb_ray, 'coarse_ts': coarse_ts,
+        #         'fine_ts': fine_ts, 'coarse_deltas': coarse_deltas, 'fine_deltas': fine_deltas, 
+        #         'coarse_density': coarse_density, 'fine_density': fine_density}
         
-
     def configure_optimizers(self):
         # end_lr = start_lr * gamma^epochs
         start_lr = 5e-4
@@ -327,7 +327,7 @@ class NeRFModel(nn.Module):
 
         self.density_fn = nn.Sequential(
             nn.Linear(256, 1),
-            nn.ReLU() # rectified to ensure nonnegative density
+            nn.Softplus() # nn.ReLU() # rectified to ensure nonnegative density
         )
 
         self.rgb_fn = nn.Sequential(
