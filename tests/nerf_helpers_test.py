@@ -8,7 +8,7 @@ import nerf_helpers
 import torch.testing as testing
 import numpy as np
 
-class DataloaderTest(unittest.TestCase): 
+class NeRFHelpersTest(unittest.TestCase): 
 
     def setUp(self):
         pass
@@ -44,7 +44,8 @@ class DataloaderTest(unittest.TestCase):
     def test_generate_deltas(self):
         ts = torch.arange(2, 6, 1).view((1,-1,1))
         gt_deltas = torch.ones((1,4,1))
-        deltas = nerf_helpers.generate_deltas(ts, far=6.0)
+        gt_deltas[:,-1,:] = 1e10 
+        deltas = nerf_helpers.generate_deltas(ts)
         testing.assert_close(deltas, gt_deltas)
 
     def test_generate_random_samples(self):

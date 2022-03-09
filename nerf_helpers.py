@@ -59,7 +59,7 @@ def generate_deltas(ts: torch.Tensor):
         ts: [N x num_samples x 1] tensor of times. The values are increasing from [near,far] along
             the num_samples dimension.
     Returns:
-        deltas: [N x num_samples x 1]  where delta_i = t_i+1 - t_i. t_num_samples=far
+        deltas: [N x num_samples x 1]  where delta_i = t_i+1 - t_i.
     """
     N, _, _ = ts.shape
     deltas = torch.cat([ts[:,1:,:] - ts[:,:-1,:], 
@@ -79,7 +79,7 @@ def calculate_unnormalized_weights(density: torch.Tensor, deltas: torch.Tensor):
     N, s, _ = density.shape
     neg_delta_density = - 1 * density * deltas
     shifted_neg_delta_density = torch.cat((torch.zeros((N,1,1), device=device), 
-                                          neg_delta_density[:,:-1,:]), axis=1)
+                                          neg_delta_density[:,:-1,:]), dim=1)
     transmittance =  torch.exp(torch.cumsum(shifted_neg_delta_density, dim=1))
     weights = (1 - torch.exp(neg_delta_density)) * transmittance
     # alphas = 1 - torch.exp(-1 * density * deltas)
