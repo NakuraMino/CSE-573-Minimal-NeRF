@@ -49,8 +49,11 @@ def generate_coarse_samples(o_rays: torch.Tensor, d_rays: torch.Tensor,
     samples = d_rays * ts + o_rays
     return samples, ts
 
-def generate_deltas(ts: torch.Tensor, far=6.0):
+def generate_deltas(ts: torch.Tensor):
     """Calculates the difference between each 'time' in ray samples.
+
+    Rays will go to infinity unless obstructed. Therefore, the delta
+    between the ts and infinity is expressed as 1e10
 
     Args:
         ts: [N x num_samples x 1] tensor of times. The values are increasing from [near,far] along
@@ -59,8 +62,8 @@ def generate_deltas(ts: torch.Tensor, far=6.0):
         deltas: [N x num_samples x 1]  where delta_i = t_i+1 - t_i. t_num_samples=far
     """
     N, _, _ = ts.shape
-    upper_bound = torch.cat([ts[:,1:,:], torch.full((N, 1, 1), far, device=device)], dim=1)
-    deltas = upper_bound - ts
+    deltas = torch.cat([ts[:,1:,:] - ts[:,:-1,:], 
+                        torch.full((N, 1, 1), 1e10, device=device)], dim=1)
     return deltas
 
 def calculate_unnormalized_weights(density: torch.Tensor, deltas: torch.Tensor):
@@ -79,6 +82,9 @@ def calculate_unnormalized_weights(density: torch.Tensor, deltas: torch.Tensor):
                                           neg_delta_density[:,:-1,:]), axis=1)
     transmittance =  torch.exp(torch.cumsum(shifted_neg_delta_density, dim=1))
     weights = (1 - torch.exp(neg_delta_density)) * transmittance
+    # alphas = 1 - torch.exp(-1 * density * deltas)
+    # shifted_alphas = torch.cat((torch.ones((N,1,1), device=device), alphas[:,:-1,:]), dim=1)
+    # weights = torch.cumprod(1 - shifted_alphas, dim=1) * alphas
     return weights
 
 def estimate_ray_color(weights, rgb):
@@ -131,7 +137,6 @@ def inverse_transform_sampling(o_rays: torch.Tensor, d_rays: torch.Tensor, weigh
     samples = torch.arange(0, 1, 1 / num_samples, device = device)
     samples = torch.broadcast_to(samples, (N, num_samples))
     samples = samples + eps
-
     cdf = torch.squeeze(cdf, -1)  # make dimensions match, [N x C]
     lower_idxs = torch.searchsorted(cdf, samples).unsqueeze(-1)  # [N x C x 1]
     upper_idxs = lower_idxs + 1

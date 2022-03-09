@@ -305,7 +305,6 @@ class NeRFModel(nn.Module):
         self.position_dim = position_dim
         self.direction_dim = direction_dim
         # first MLP is a simple multi-layer perceptron 
-        self.idx = 0
         self.mlp = nn.Sequential(
             nn.Linear(self.position_dim*2*3, 256),
             ACT_FN,
