@@ -113,7 +113,7 @@ class NeRFNetwork(LightningModule):
         # end_lr = start_lr * gamma^epochs
         start_lr = 5e-4
         end_lr = 5e-5
-        num_epochs = 5000
+        num_epochs = 1200
         gamma = (end_lr / start_lr) ** (1/num_epochs)
         optimizer = torch.optim.Adam(self.parameters(), lr=start_lr)
         # https://github.com/PyTorchLightning/pytorch-lightning/issues/960
