@@ -326,7 +326,7 @@ class NeRFModel(nn.Module):
 
         self.density_fn = nn.Sequential(
             nn.Linear(256, 1),
-            nn.Softplus() # nn.ReLU() # rectified to ensure nonnegative density
+            nn.ReLU() # rectified to ensure nonnegative density
         )
 
         self.rgb_fn = nn.Sequential(
