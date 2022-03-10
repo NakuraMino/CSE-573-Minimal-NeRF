@@ -34,6 +34,26 @@ def positional_encoding(x, dim=10):
     positional_encoding = torch.cat(positional_encoding, dim=-1)
     return positional_encoding
 
+def normalize_coordinates(x, bound=math.pi): 
+    """Normalize coordinates to be within [-1,1].
+
+    Coordinates have to be within [-1,1] so they are not
+    affected by the periodicity of the positional encodings.
+
+    Why is math.pi the default value you ask? Good question. It's because
+    I saw empirically that all coordinates are within [-3,3], but 3 feels
+    like a random number. https://github.com/bmild/nerf/issues/12 gives a
+    better justification for why we use pi :)
+
+    Args:
+        x: [N x num_samples x 3] tensor of coordinates. All coordinates
+          should be within [-bound, bound] so that they can be normalized
+          within [-1,1].
+        bound: the maximum value that x can have. Cannot be bound=0.
+    Returns:
+        normalized coordinates (i.e. x / bound)
+    """
+    return x / bound
 
 class NeRFNetwork(LightningModule):
     """A full NeRF Network.
@@ -356,8 +376,7 @@ class NeRFModel(nn.Module):
         direc = torch.broadcast_to(direc[:, None, :], samples.shape)
 
         # positional encodings
-        # https://github.com/bmild/nerf/issues/12
-        samples = samples /  math.pi # normalize so values are all within [-1,1]?
+        samples = normalize_coordinates(samples)
         pos_enc_samples = positional_encoding(samples, dim=self.position_dim)
         pos_enc_direc = positional_encoding(direc, dim=self.direction_dim)
         # feed forward network
