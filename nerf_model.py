@@ -351,6 +351,7 @@ class NeRFModel(nn.Module):
         direc = torch.broadcast_to(direc[:, None, :], samples.shape)
 
         # positional encodings
+        # https://github.com/bmild/nerf/issues/12
         samples = samples / 3 # normalize so values are all within [-1,1]?
         pos_enc_samples = positional_encoding(samples, dim=self.position_dim)
         pos_enc_direc = positional_encoding(direc, dim=self.direction_dim)
