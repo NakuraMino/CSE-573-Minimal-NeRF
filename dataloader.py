@@ -70,7 +70,7 @@ class SyntheticDataModule(LightningDataModule):
             return DataLoader(dataset=self.train_ds, batch_size=1, shuffle=True,
                               num_workers=self.num_workers)
 
-    def val_dataloader(self): 
+    def val_dataloader(self):
         return DataLoader(dataset=self.val_ds, batch_size=1,
                           shuffle=False, num_workers=self.num_workers)
 
@@ -114,7 +114,7 @@ class SyntheticDataset(Dataset):
 
     def __getitem__(self, idx):
         frame = self.frames[idx]
-        # retrieve image 
+        # retrieve image.
         cam_to_world = torch.Tensor(frame['transform_matrix']) 
         o_rays, d_rays = get_rays(self.H, self.W, self.focal, cam_to_world)  # [HxWx3]
         image = (torch.Tensor(imageio.imread(frame['file_path'], pilmode="RGB")) / 255.0).float()  # [HxWx3]

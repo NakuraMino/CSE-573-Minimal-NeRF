@@ -14,13 +14,11 @@ class NeRFHelpersTest(unittest.TestCase):
         pass
 
     def test_calculate_unnormalized_weights(self):
-        # (density: torch.Tensor, deltas: torch.Tensor)
         deltas = torch.full((1,5,1), 0.2)
         density = torch.Tensor([0,50,1,0.3,1]).view(deltas.shape)
         weights = nerf_helpers.calculate_unnormalized_weights(density, deltas)
         gt_weights = torch.Tensor([0, 0.9999546001, 8.229611e-6, 2.1646e-6, 6.34545e-6]).view(deltas.shape)
         testing.assert_close(weights, gt_weights)
-        pass
 
     def test_estimate_ray_color(self):
         # testing one ray with equal weights and equal colors

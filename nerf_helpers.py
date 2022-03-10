@@ -82,9 +82,6 @@ def calculate_unnormalized_weights(density: torch.Tensor, deltas: torch.Tensor):
                                           neg_delta_density[:,:-1,:]), dim=1)
     transmittance =  torch.exp(torch.cumsum(shifted_neg_delta_density, dim=1))
     weights = (1 - torch.exp(neg_delta_density)) * transmittance
-    # alphas = 1 - torch.exp(-1 * density * deltas)
-    # shifted_alphas = torch.cat((torch.ones((N,1,1), device=device), alphas[:,:-1,:]), dim=1)
-    # weights = torch.cumprod(1 - shifted_alphas, dim=1) * alphas
     return weights
 
 def estimate_ray_color(weights, rgb):

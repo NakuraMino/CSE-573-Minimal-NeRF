@@ -347,8 +347,11 @@ class NeRFModel(nn.Module):
             rgb: [N x samples x 3] color/rgb predictions.
         """
         # direction needs to be broadcasted since it hasn't been sampled
+        direc = direc / torch.linalg.norm(direc, dim=1, keepdim=True)  # unit direction
         direc = torch.broadcast_to(direc[:, None, :], samples.shape)
+
         # positional encodings
+        samples = samples / 3 # normalize so values are all within [-1,1]?
         pos_enc_samples = positional_encoding(samples, dim=self.position_dim)
         pos_enc_direc = positional_encoding(direc, dim=self.direction_dim)
         # feed forward network
