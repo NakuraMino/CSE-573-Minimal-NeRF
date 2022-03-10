@@ -1,12 +1,18 @@
-import torch 
+"""NeRF models.
+
+Contains the various models and sub-models used to train a Neural Radiance Field (NeRF).
+"""
+import math
+import random
+import numpy as np
+from PIL import Image
+import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import numpy as np
-from pytorch_lightning import LightningModule
-import nerf_helpers
-from PIL import Image
-import random
 from timeit import default_timer as timer
+from pytorch_lightning import LightningModule
+
+import nerf_helpers
 
 
 ACT_FN = nn.ReLU()  # nn.LeakyReLU(0.1)
@@ -35,6 +41,7 @@ class NeRFNetwork(LightningModule):
     Pytorch-Lightning Wrapper to train both the coarse and the fine network
     in one model. 
     """
+
     def __init__(self, position_dim=10, direction_dim=4, coarse_samples=64,
                  fine_samples=128, near=2.0, far=6.0):
         """NeRF Constructor.
@@ -105,9 +112,6 @@ class NeRFNetwork(LightningModule):
         fine_rgb_ray = nerf_helpers.estimate_ray_color(fine_weights, fine_rgb)
         
         return {'fine_rgb_rays': fine_rgb_ray, 'coarse_rgb_rays': coarse_rgb_ray}
-        # return {'fine_rgb_rays': fine_rgb_ray, 'coarse_rgb_rays': coarse_rgb_ray, 'coarse_ts': coarse_ts,
-        #         'fine_ts': fine_ts, 'coarse_deltas': coarse_deltas, 'fine_deltas': fine_deltas, 
-        #         'coarse_density': coarse_density, 'fine_density': fine_density}
         
     def configure_optimizers(self):
         # end_lr = start_lr * gamma^epochs
@@ -188,6 +192,7 @@ class SingleNeRF(LightningModule):
 
     Pytorch-Lightning Wrapper to train a single NeRF Model. Mostly for debugging purposes.
     """
+
     def __init__(self, position_dim=10, direction_dim=4, num_samples=128, near=2.0, far=6.0):
         """NeRF Constructor.
 
@@ -352,7 +357,7 @@ class NeRFModel(nn.Module):
 
         # positional encodings
         # https://github.com/bmild/nerf/issues/12
-        samples = samples / 3 # normalize so values are all within [-1,1]?
+        samples = samples /  math.pi # normalize so values are all within [-1,1]?
         pos_enc_samples = positional_encoding(samples, dim=self.position_dim)
         pos_enc_direc = positional_encoding(direc, dim=self.direction_dim)
         # feed forward network

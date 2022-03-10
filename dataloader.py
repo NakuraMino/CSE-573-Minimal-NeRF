@@ -5,17 +5,10 @@ import torch
 from torch.utils.data import Dataset, DataLoader
 from pytorch_lightning import LightningDataModule
 import numpy as np
-from PIL import Image
 import imageio
 import json
 from pathlib import Path
 
-def image_to_tensor(image):
-    if image.ndim == 4: # NHWC
-        tensor = torch.from_numpy(image).permute(0,3,1,2).float()
-    elif image.ndim == 3: # HWC
-        tensor = torch.from_numpy(image).permute(2,0,1).float()
-    return tensor
 
 def sample_random_coordinates(N, height, width, cropping=False): 
     """Two [N,] torch tensors representing random coordinates.
@@ -49,7 +42,42 @@ def get_rays(H, W, focal, c2w):
     rays_o = torch.broadcast_to(c2w[:3, -1], rays_d.shape)
     return rays_o, rays_d
 
+def convert_to_ndc_rays(o_rays, d_rays, focal, width, height, near=1.0): 
+    """This is only for FRONT-FACING scenes.
+
+    Args:
+        o_rays: [H x W x 3] representing ray origin.
+        d_rays: [H x W x 3] representing ray direction.
+        focal: focal length.
+        width: the maximum width 
+        height: the maximum height
+        near: the near depth bound (i.e. 1)
+    Return:
+        o_ndc_rays: [H x W x 3] representing ray origin.
+        d_ndc_rays: [H x W x 3] representing ray direction.
+    """
+    # shift o to the ray’s intersection with the near plane at z = −n
+    t_near  = - (near + o_rays[:,:,2] ) / d_rays[:,:,2] 
+    o_rays = o_rays + t_near[...,None] * d_rays
+
+    ox, oy, oz = o_rays[:,:,0], o_rays[:,:,1], o_rays[:,:,2] 
+    dx, dy, dz = d_rays[:,:,0], d_rays[:,:,1], d_rays[:,:,2] 
+    
+    ox_new =  -1. * focal / (width / 2) * (ox / oz)
+    oy_new =  -1. * focal / (height / 2) * (oy / oz)
+    oz_new = 1. + (2 * near) / oz
+    dx_new =  -1. * focal / (width / 2) * ((dx / dz) - (ox / oz))
+    dy_new =  -1. * focal / (height / 2) * ((dy / dz) - (oy / oz))
+    dz_new = (- 2. * near) / oz
+    
+    o_ndc_rays = torch.stack([ox_new, oy_new, oz_new], axis=-1)
+    d_ndc_rays = torch.stack([dx_new, dy_new, dz_new], axis=-1)
+    d_ndc_rays = d_ndc_rays / torch.linalg.norm(d_ndc_rays, dim=-1,keepdim=True)
+    return o_ndc_rays, d_ndc_rays
+
 class SyntheticDataModule(LightningDataModule):
+    """Wrapper to switch train dataloader from cropping to not cropping after self.cropping_epochs.
+    """
     def __init__(self, base_dir, num_rays, cropping_epochs, num_workers=8):
         self.num_rays = num_rays
         self.base_dir = base_dir
@@ -134,13 +162,14 @@ def getSyntheticDataloader(base_dir, tvt, num_rays, cropping=False, num_workers=
     return DataLoader(dataset=dataset, batch_size=1, shuffle=shuffle, num_workers=num_workers)
 
 class PhotoDataset(Dataset):
-
+    """Dataset for toy NeRF model.
+    
+    coords are values between [0,1].
+    """
     def __init__(self, im_path): 
         self.im_path = im_path
-        im = np.array(Image.open(im_path)) / 255.0
-        self.im = image_to_tensor(im) # C x H x W
-        self.C, self.H, self.W = self.im.shape 
-        del im
+        self.im = (torch.Tensor(imageio.imread(self.im_path, pilmode="RGB")) / 255.0).float()
+        self.H, self.W, self.C= self.im.shape 
 
     def __len__(self):
         return self.H * self.W
@@ -149,7 +178,7 @@ class PhotoDataset(Dataset):
         h = idx // self.W
         w = idx % self.W
         coords = torch.FloatTensor([h / (self.H - 1), w / (self.W - 1)])
-        rgb = self.im[:, h, w]
+        rgb = self.im[h, w, :]
         return coords, rgb
 
 def getPhotoDataloader(im_path, batch_size=1024, num_workers=4, shuffle=True): 
@@ -160,7 +189,7 @@ class ValDataset(Dataset):
 
     def __init__(self, im_path):
         self.im_path = im_path
-        self.im = np.array(Image.open(im_path)) / 255.0
+        self.im = (torch.Tensor(imageio.imread(self.im_path, pilmode="RGB")) / 255.0).float()
         self.H, self.W, self.C = self.im.shape 
 
     def __len__(self):

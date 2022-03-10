@@ -1,3 +1,10 @@
+"""Utility functions to help with training a NeRF model.
+
+Contains functions to generate coarse samples, ray colors,
+and inverse transform sampling. We also have functions to help
+render images from novel views, along with a few functions
+borrowed from the original NeRF model.
+"""
 import torch
 import numpy as np
 import itertools
@@ -154,7 +161,8 @@ View / Image reconstruction utilities
 """""""""""""""
 
 def generate_360_view_synthesis(model, save_dir: Path, epoch, height=800, width=800,
-                                radius=4.0, cam_angle_x=0.6911112070083618, N=4096):
+                                radius=4.0, cam_angle_x=0.6911112070083618, N=4096,
+                                num_poses=40):
     """Generates a 360 view of a NeRF model.
 
     Saves a 360 degree view of the NeRF model at SAVE_DIR/EPOCH-360.gif
@@ -166,9 +174,10 @@ def generate_360_view_synthesis(model, save_dir: Path, epoch, height=800, width=
         height/width: height of the images that NeRF was trained on.
         radius: The 360 view from a radius.
         cam_angle_x: x-axis field of view in angles.
+        num_poses: number of images to use in the 360 view synthesis.
     """
     assert save_dir.exists() and save_dir.is_dir()
-    poses = [pose_spherical(angle, -30, radius) for angle in np.linspace(-180,180,40+1)[:-1]]
+    poses = [pose_spherical(angle, -30, radius) for angle in np.linspace(-180,180,num_poses+1)[:-1]]
     focal = 0.5 * width / np.tan(0.5 * cam_angle_x)
     views = []
     for pose in tqdm(poses):
@@ -255,7 +264,7 @@ def save_torch_as_image(torch_tensor, file_path, is_normalized_image=False):
 
 
 """""""""""""""
-Code from original NeRF repository
+Code from original NeRF repository: https://github.com/bmild/nerf
 """""""""""""""
 
 trans_t = lambda t : torch.tensor([
