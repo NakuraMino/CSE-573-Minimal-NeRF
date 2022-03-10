@@ -45,17 +45,6 @@ class DataloaderTest(unittest.TestCase):
         self.assertTrue('origin' in batch)
         self.assertTrue('direc' in batch)
         self.assertTrue('rgb' in batch)
-        
-    # I was going to test my rays but ummm, its kind of hard
-    # def test_synthetic_get_ray(self):
-    #     torch.manual_seed(0)
-    #     idx = torch.Tensor([[44], [39]])
-    #     batch = self.sds[0]
-    #     origin, direc, rgba = batch['origin'], batch['direc'], batch['rgba']
-    #     print(origin)
-    #     gt_origin = torch.Tensor([[0.76, 0.56, 3.0]])
-    #     testing.assert_close(origin, gt_origin)
-
 
 if __name__ == '__main__':
     unittest.main(verbosity=2)
