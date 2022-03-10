@@ -4,7 +4,11 @@ This is a semi-faithful pytorch-lightning implementation of Neural Radiance Fiel
 
 ## Installation
 
-I don't have a `requirements.txt` or `env.yml` file becuase of *reasons*, but you really only need to install `pytorch`, run `pip install wandb`, and `pip install pytorch-lightning`.
+We have a minimal `requirements.txt` file which can be installed using 
+
+```
+pip install -r requirements.txt
+```
 
 To clone this repository and download the lego dataset, run 
 
@@ -39,7 +43,5 @@ where `CKPT_PATH` is the path to the saved checkpoint model. It's probably in yo
 ## Repository Results
 
 Yes, my results are sad in comparison. Yes, I am very bummed. No, I have not found my bug/issue.
-
-<!-- ![lego-360.gif](./recons/epoch=569-360v2.gif) -->
 
 <img src="./recons/epoch=569-360v2.gif" width="400">
