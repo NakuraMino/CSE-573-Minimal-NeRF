@@ -5,3 +5,4 @@ Pillow==9.0.1
 pytorch_lightning==1.5.10
 torch==1.10.0+cu111
 tqdm==4.63.0
+wandb==0.12.11
