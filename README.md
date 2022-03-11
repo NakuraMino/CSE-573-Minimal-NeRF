@@ -1,24 +1,35 @@
 # CSEP573-NeRF
 
-<img src="./media/epoch=799-360.gif" width="300">
+<img src="./media/model=lego-epoch=1089-360.gif" width="300">
 
-This is a semi-faithful pytorch-lightning implementation of Neural Radiance Fields (NeRF) from [NeRF: Representing Scenes as Neural Radiance for View Synthesis](https://arxiv.org/abs/2003.08934). We implement the whole repository from scratch with minimal guidance from the [original repository](https://github.com/bmild/nerf). In fact, we only borrow minimal code to generate rays and 360 degree views. We built the remaining training pipeline and models from scratch.
+This is a semi-faithful pytorch-lightning implementation of Neural Radiance Fields (NeRF) from [NeRF: Representing Scenes as Neural Radiance for View Synthesis](https://arxiv.org/abs/2003.08934). We implement the whole repository from scratch with minimal guidance from the [original repository](https://github.com/bmild/nerf). In fact, we only borrow minimal code to generate rays, 360 degree views, etc. We built the remaining training pipeline and models from scratch.
+
+
+## Why Another NeRF Implementation? 
+
+<img src="./media/meme.jpg" width="300">
+
+I believe in learning by doing! There were a billion details I would have never understood from simply reading the paper, so I implemented it. Also, because, well, you know. *School*.
+
+NOTE: I don't think performance is as good as the original repository. Probably because some of my methods aren't as mathematically correct as some of the original repository? Whatever. 
 
 ## Installation
 
-We have a minimal `requirements.txt` file which can be installed using 
+Setting up this repository is really simple and easy. 
 
 ```
-pip install -r requirements.txt
+# clone repository
+!git clone https://github.com/NakuraMino/CSEP573-NeRF.git
+%cd CSEP573-NeRF/
+
+# install libraries not on colab default
+!pip install -r requirements.txt
+
+# download dataset
+!./download_synthetic_data.sh MODEL
 ```
 
-To clone this repository and download the lego dataset, run 
-
-```
-git clone https://github.com/NakuraMino/CSEP573-NeRF.git
-cd CSEP573-NeRF/
-./download_data.sh
-```
+where MODEL is the model you want to train/render. Options are one of `chair`, `drums`, `ficus`, `hotdog`, `lego`, `materials`, `mic`, and `ship`.
 
 ## Training a Model 
 
@@ -29,7 +40,9 @@ To train a NeRF model, you should run
                       -r 4096 full -b BASE_DIR -cr 0
 ```
 
-where the `ROOT_DIR` is the root directory to save your model checkpoints, and `BASE_DIR` is the path to your data directory (should look like `./data/nerf_synthetic/lego/` or something along those lines).
+where the `ROOT_DIR` is the root directory to save your model checkpoints, and `BASE_DIR` is the path to your data directory (should look like `./data/nerf_synthetic/lego/` or something along those lines). 
+Some models, like `mic` and `ficus` will probably benefit from `-cr 1000`. This is a flag that crops the images to only sample from the center for the first 1000 iterations. It helps because these models
+have a lot of empty backgrounds, which lead to more failures during the start of training (apparently).
 
 
 ## Viewing Results
@@ -46,13 +59,9 @@ where `CKPT_PATH` is the path to the saved checkpoint model. It's probably in yo
 
 ~Yes, my results are sad in comparison. Yes, I am very bummed. No, I have not found my bug/issue.~
 
-We fixed it! This works now.
+We fixed it! This works now. I have limited computational resources so please forgive the fact I only have a meager amount of gifs compared to the original repository.
 
-COMING SOON!!!
-
-Here are some failures:
-
-<img src="./media/epoch=799-360.gif" width="300">
+<img src="./media/model=lego-epoch=1089-360.gif" width="300">
 
 ## Acknowledgements / Citations
 
@@ -62,7 +71,7 @@ I got super confused. I don't think I borrowed code from either repositories but
 I referenced them a lot. Thanks :)
 
 #### Neural Radiance Fields (bmild)
-Original: https://github.com/bmild/nerf
+Link: https://github.com/bmild/nerf
 
 ```
 @misc{mildenhall2020nerf,
@@ -76,7 +85,7 @@ Original: https://github.com/bmild/nerf
 ```
 
 #### nerf_pl (kwea123)
-Original: https://github.com/kwea123/nerf_pl
+Link: https://github.com/kwea123/nerf_pl
 
 ```
 @misc{queianchen_nerf,
@@ -88,7 +97,7 @@ Original: https://github.com/kwea123/nerf_pl
 ```
 
 #### nerf-pytorch (yenchinlin)
-Original: https://github.com/yenchenlin/nerf-pytorch
+Link: https://github.com/yenchenlin/nerf-pytorch
 
 ```
 @misc{lin2020nerfpytorch,
