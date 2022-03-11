@@ -1,3 +1,10 @@
+"""Utility functions to help with training a NeRF model.
+
+Contains functions to generate coarse samples, ray colors,
+and inverse transform sampling. We also have functions to help
+render images from novel views, along with a few functions
+borrowed from the original NeRF model.
+"""
 import torch
 import numpy as np
 import itertools
@@ -49,18 +56,21 @@ def generate_coarse_samples(o_rays: torch.Tensor, d_rays: torch.Tensor,
     samples = d_rays * ts + o_rays
     return samples, ts
 
-def generate_deltas(ts: torch.Tensor, far=6.0):
+def generate_deltas(ts: torch.Tensor):
     """Calculates the difference between each 'time' in ray samples.
+
+    Rays will go to infinity unless obstructed. Therefore, the delta
+    between the ts and infinity is expressed as 1e10
 
     Args:
         ts: [N x num_samples x 1] tensor of times. The values are increasing from [near,far] along
             the num_samples dimension.
     Returns:
-        deltas: [N x num_samples x 1]  where delta_i = t_i+1 - t_i. t_num_samples=far
+        deltas: [N x num_samples x 1]  where delta_i = t_i+1 - t_i.
     """
     N, _, _ = ts.shape
-    upper_bound = torch.cat([ts[:,1:,:], torch.full((N, 1, 1), far, device=device)], dim=1)
-    deltas = upper_bound - ts
+    deltas = torch.cat([ts[:,1:,:] - ts[:,:-1,:], 
+                        torch.full((N, 1, 1), 1e10, device=device)], dim=1)
     return deltas
 
 def calculate_unnormalized_weights(density: torch.Tensor, deltas: torch.Tensor):
@@ -76,7 +86,7 @@ def calculate_unnormalized_weights(density: torch.Tensor, deltas: torch.Tensor):
     N, s, _ = density.shape
     neg_delta_density = - 1 * density * deltas
     shifted_neg_delta_density = torch.cat((torch.zeros((N,1,1), device=device), 
-                                          neg_delta_density[:,:-1,:]), axis=1)
+                                          neg_delta_density[:,:-1,:]), dim=1)
     transmittance =  torch.exp(torch.cumsum(shifted_neg_delta_density, dim=1))
     weights = (1 - torch.exp(neg_delta_density)) * transmittance
     return weights
@@ -94,7 +104,8 @@ def estimate_ray_color(weights, rgb):
     ray_color = torch.sum(weights * rgb, dim=1)
     return ray_color
 
-def inverse_transform_sampling(o_rays: torch.Tensor, d_rays: torch.Tensor, weights, ts, num_samples):
+def inverse_transform_sampling(o_rays: torch.Tensor, d_rays: torch.Tensor, weights, ts,
+                               num_samples, near=2.0, far=6.0):
     """Performs inverse transform sampling according to the weights.
 
     Samples from ts according to the weights (i.e. ts with higher weights are 
@@ -113,6 +124,7 @@ def inverse_transform_sampling(o_rays: torch.Tensor, d_rays: torch.Tensor, weigh
         ts: [N x C x 1] is the increment between each sample. N is the batch 
             size, and C is the number of coarse samples. 
         num_samples: number of samples to return per ray.
+        near/far: near/far bounds for sampling. 
     Returns:
         fine_samples: [N x num_samples x 3] tensor sampled according to weights.
                       Instead of using the same values as in ts, we pertube it by 
@@ -129,13 +141,18 @@ def inverse_transform_sampling(o_rays: torch.Tensor, d_rays: torch.Tensor, weigh
     samples = torch.arange(0, 1, 1 / num_samples, device = device)
     samples = torch.broadcast_to(samples, (N, num_samples))
     samples = samples + eps
-
     cdf = torch.squeeze(cdf, -1)  # make dimensions match, [N x C]
-    idxs = torch.searchsorted(cdf, samples).unsqueeze(-1)  # [N x C x 1]
-    idxs[idxs >= C] = C - 1
-    bins = torch.gather(ts, 1, idxs)
+    lower_idxs = torch.searchsorted(cdf, samples).unsqueeze(-1)  # [N x C x 1]
+    upper_idxs = lower_idxs + 1
     
-    fine_ts = bins + torch.rand((N, num_samples, 1), device=device) / num_samples
+    lower = torch.full((N,1,1), near, device=device)
+    upper = torch.full((N,1,1), far, device=device)
+    ts_bounds = torch.cat([lower, ts, upper], dim=1)
+    
+    lower_bins = torch.gather(ts_bounds, 1, lower_idxs)
+    upper_bins = torch.gather(ts_bounds, 1, upper_idxs)
+    
+    fine_ts = lower_bins + (upper_bins - lower_bins) * torch.rand((N,num_samples,1), device=device)
     fine_samples = o_rays + fine_ts * d_rays
     return fine_samples, fine_ts
 
@@ -144,9 +161,23 @@ View / Image reconstruction utilities
 """""""""""""""
 
 def generate_360_view_synthesis(model, save_dir: Path, epoch, height=800, width=800,
-                                radius=4.0, cam_angle_x=0.6911112070083618, N=4096):
+                                radius=4.0, cam_angle_x=0.6911112070083618, N=4096,
+                                num_poses=40):
+    """Generates a 360 view of a NeRF model.
+
+    Saves a 360 degree view of the NeRF model at SAVE_DIR/EPOCH-360.gif
+    
+    Args:
+        model: a nerf_model.NeRFNetwork object
+        save_dir: path to a save directory.
+        epoch: the ckpt epoch, used in naming the resulting gif.
+        height/width: height of the images that NeRF was trained on.
+        radius: The 360 view from a radius.
+        cam_angle_x: x-axis field of view in angles.
+        num_poses: number of images to use in the 360 view synthesis.
+    """
     assert save_dir.exists() and save_dir.is_dir()
-    poses = [pose_spherical(angle, -30, radius) for angle in np.linspace(-180,180,40+1)[:-1]]
+    poses = [pose_spherical(angle, -30, radius) for angle in np.linspace(-180,180,num_poses+1)[:-1]]
     focal = 0.5 * width / np.tan(0.5 * cam_angle_x)
     views = []
     for pose in tqdm(poses):
@@ -233,7 +264,7 @@ def save_torch_as_image(torch_tensor, file_path, is_normalized_image=False):
 
 
 """""""""""""""
-Code from original NeRF repository
+Code from original NeRF repository: https://github.com/bmild/nerf
 """""""""""""""
 
 trans_t = lambda t : torch.tensor([

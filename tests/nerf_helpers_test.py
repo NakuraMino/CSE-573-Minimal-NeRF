@@ -8,19 +8,17 @@ import nerf_helpers
 import torch.testing as testing
 import numpy as np
 
-class DataloaderTest(unittest.TestCase): 
+class NeRFHelpersTest(unittest.TestCase): 
 
     def setUp(self):
         pass
 
     def test_calculate_unnormalized_weights(self):
-        # (density: torch.Tensor, deltas: torch.Tensor)
         deltas = torch.full((1,5,1), 0.2)
         density = torch.Tensor([0,50,1,0.3,1]).view(deltas.shape)
         weights = nerf_helpers.calculate_unnormalized_weights(density, deltas)
         gt_weights = torch.Tensor([0, 0.9999546001, 8.229611e-6, 2.1646e-6, 6.34545e-6]).view(deltas.shape)
         testing.assert_close(weights, gt_weights)
-        pass
 
     def test_estimate_ray_color(self):
         # testing one ray with equal weights and equal colors
@@ -44,7 +42,8 @@ class DataloaderTest(unittest.TestCase):
     def test_generate_deltas(self):
         ts = torch.arange(2, 6, 1).view((1,-1,1))
         gt_deltas = torch.ones((1,4,1))
-        deltas = nerf_helpers.generate_deltas(ts, far=6.0)
+        gt_deltas[:,-1,:] = 1e10 
+        deltas = nerf_helpers.generate_deltas(ts)
         testing.assert_close(deltas, gt_deltas)
 
     def test_generate_random_samples(self):

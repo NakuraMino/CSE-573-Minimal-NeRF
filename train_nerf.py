@@ -12,6 +12,7 @@ My personal use:
 """
 from pytorch_lightning import Trainer
 from pytorch_lightning.loggers import WandbLogger
+from pytorch_lightning.callbacks import LearningRateMonitor
 import dataloader 
 import nerf_model 
 import argparse
@@ -21,10 +22,11 @@ def train_full_nerf(root_dir, base_dir, logger_name, steps, pos_enc, direc_enc, 
     """Train full NeRF model (coarse+fine network f(x,y,z,theta,rho)->rgb+sigma""" 
     wandb_logger = WandbLogger(name=logger_name, project="NeRF")
     wandb_logger.log_hyperparams(args)
+    lr_monitor = LearningRateMonitor(logging_interval='epoch')
     trainer = Trainer(gpus=int(use_gpu), default_root_dir=root_dir, max_steps=steps, 
                       resume_from_checkpoint=ckpt, logger=wandb_logger,
-                      check_val_every_n_epoch=10, track_grad_norm=2, 
-                      reload_dataloaders_every_n_epochs=cropping_epochs)
+                      check_val_every_n_epoch=10, track_grad_norm=2,
+                      reload_dataloaders_every_n_epochs=cropping_epochs, callbacks=[lr_monitor])
     data_module = dataloader.SyntheticDataModule(base_dir, num_rays, cropping_epochs, num_workers=2)
     model = nerf_model.NeRFNetwork(position_dim=pos_enc, direction_dim=direc_enc, 
                                    coarse_samples=coarse_samples, fine_samples=fine_samples,
