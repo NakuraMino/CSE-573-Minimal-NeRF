@@ -5,7 +5,6 @@ Contains the various models and sub-models used to train a Neural Radiance Field
 import math
 import random
 import numpy as np
-from PIL import Image
 import torch
 import torch.nn as nn
 import torch.nn.functional as F

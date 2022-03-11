@@ -8,7 +8,6 @@ borrowed from the original NeRF model.
 import torch
 import numpy as np
 import itertools
-from PIL import Image
 import dataloader
 import imageio
 from tqdm import tqdm
@@ -250,17 +249,6 @@ def torch_to_numpy(torch_tensor, is_normalized_image = False):
         np_tensor *= 255
         np_tensor = np.clip(np_tensor, 0, 255)
     return np_tensor
-
-def save_torch_as_image(torch_tensor, file_path, is_normalized_image=False):
-    """ saves torch tensor as a sequence of images
-
-        @param torch_tensor: [N x C x H x W] tensor or a single [H x W x C] tensor
-        @param file_path: place to save file to
-        @param is_normalized_image: whether the image is normalized or not
-    """
-    im = torch_to_numpy(torch_tensor, is_normalized_image=is_normalized_image)
-    img = Image.fromarray(im.astype(np.uint8)) 
-    img = img.save(f"{file_path}.png")
 
 
 """""""""""""""
