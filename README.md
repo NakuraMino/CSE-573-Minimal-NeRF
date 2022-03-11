@@ -1,6 +1,6 @@
 # CSEP573-NeRF
 
-<img src="./media/epoch=569-360v2.gif" width="300">
+<img src="./media/epoch=799-360.gif" width="300">
 
 This is a semi-faithful pytorch-lightning implementation of Neural Radiance Fields (NeRF) from [NeRF: Representing Scenes as Neural Radiance for View Synthesis](https://arxiv.org/abs/2003.08934). We implement the whole repository from scratch with minimal guidance from the [original repository](https://github.com/bmild/nerf). In fact, we only borrow minimal code to generate rays and 360 degree views. We built the remaining training pipeline and models from scratch.
 
@@ -52,7 +52,7 @@ COMING SOON!!!
 
 Here are some failures:
 
-<img src="./media/epoch=569-360v2.gif" width="400">
+<img src="./media/epoch=799-360.gif" width="300">
 
 ## Acknowledgements / Citations
 
