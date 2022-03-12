@@ -1,8 +1,8 @@
 # CSEP573-NeRF
-
+<p>
 <img src="./media/model=lego-epoch=1089-360.gif" width="300">
 <img src="./media/model=ship-epoch=1079-360.gif" width="300">
-
+</p>
 This is a semi-faithful pytorch-lightning implementation of Neural Radiance Fields (NeRF) from [NeRF: Representing Scenes as Neural Radiance for View Synthesis](https://arxiv.org/abs/2003.08934). We implement the whole repository from scratch with minimal guidance from the [original repository](https://github.com/bmild/nerf). In fact, we only borrow minimal code to generate rays, 360 degree views, etc. We built the remaining training pipeline and models from scratch.
 
 
@@ -61,10 +61,10 @@ where `CKPT_PATH` is the path to the saved checkpoint model. It's probably in yo
 ~Yes, my results are sad in comparison. Yes, I am very bummed. No, I have not found my bug/issue.~
 
 We fixed it! This works now. I have limited computational resources so please forgive the fact I only have a meager amount of gifs compared to the original repository.
-
+<p>
 <img src="./media/model=lego-epoch=1089-360.gif" width="300">
 <img src="./media/model=ship-epoch=1079-360.gif" width="300">
-
+</p>
 ## Acknowledgements / Citations
 
 This work refers to code from the following open-source projects and datasets. I only borrowed code
