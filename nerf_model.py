@@ -10,7 +10,6 @@ import torch.nn as nn
 import torch.nn.functional as F
 from timeit import default_timer as timer
 from pytorch_lightning import LightningModule
-
 import nerf_helpers
 
 
