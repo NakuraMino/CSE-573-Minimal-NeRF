@@ -1,0 +1,8 @@
+0% 0/200 [00:00<?, ?it/s]/usr/local/lib/python3.7/dist-packages/pytorch_lightning/core/lightning.py:416: UserWarning: 
+You are trying to `self.log()` but the `self.trainer` reference is not registered on the model yet. 
+This is most likely because the model hasn't been passed to the `Trainer` 
+"You are trying to `self.log()` but the `self.trainer` reference is not registered on the model yet."
+100% 200/200 [2:01:10<00:00, 36.35s/it]
+==============Calculate Scores==============
+average psnr score: 28.809375430487567
+average ssim score: 0.9299669489978506
