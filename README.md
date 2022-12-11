@@ -1,4 +1,4 @@
-# CSEP573-NeRF
+# Minimal-NeRF
 <p>
 <img src="./media/model=lego-epoch=1089-360.gif" width="300">
 <img src="./media/model=ship-epoch=1079-360.gif" width="300">
